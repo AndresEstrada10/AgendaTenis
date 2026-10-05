@@ -583,7 +583,7 @@ class AgendaTenisRepository private constructor() {
         val horario = if (id != null) {
             val existente = _horarios.value.firstOrNull { it.id == id }
                 ?: return Result.failure(Exception("Horario no encontrado"))
-            existente.copy(canchaId = canchaId, diaSemana = diaSemana, horaInicio = horaInicio, horaFin = horaFin)
+            existente.copy(coachId = coachId, canchaId = canchaId, diaSemana = diaSemana, horaInicio = horaInicio, horaFin = horaFin)
         } else {
             Horario(
                 id = "hor_${System.currentTimeMillis()}",
@@ -711,7 +711,7 @@ class AgendaTenisRepository private constructor() {
         }
     }
 
-    // ADMIN: Reasignar coach a jugador (A-06)
+    // ADMIN & COACH PRINCIPAL: Reasignar coach a jugador (A-06)
     fun reasignarCoachAJugador(jugadorId: String, nuevoCoachId: String): Result<Unit> {
         val jugador = _jugadores.value.firstOrNull { it.id == jugadorId }
             ?: return Result.failure(Exception("Jugador no encontrado"))
@@ -741,6 +741,23 @@ class AgendaTenisRepository private constructor() {
             jugadoresActivos = jugadoresActivos,
             pagosProximosGlobales = pagosProximos
         )
+    }
+
+    // COACH PRINCIPAL & ADMIN: Visualización y administración de coaches, sus horarios, jugadores y canchas designadas
+    fun obtenerResumenCoachesGestion(): List<ResumenCoachGestion> {
+        val coaches = _usuarios.value.filter { it.rol == Rol.COACH }
+        val canchasMap = _canchas.value.associateBy { it.id }
+        return coaches.map { coach ->
+            val jug = _jugadores.value.filter { it.coachId == coach.id && it.estado == EstadoJugador.ACTIVO }
+            val hor = _horarios.value.filter { it.coachId == coach.id }
+            val canchas = hor.mapNotNull { canchasMap[it.canchaId] }.distinctBy { it.id }
+            ResumenCoachGestion(
+                coach = coach,
+                jugadoresDesignados = jug,
+                horariosDesignados = hor,
+                canchasDesignadas = canchas
+            )
+        }
     }
 }
 

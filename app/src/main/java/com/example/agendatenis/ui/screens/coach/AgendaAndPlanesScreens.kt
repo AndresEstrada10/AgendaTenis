@@ -35,18 +35,33 @@ fun AgendaCoachScreen(
     coachId: String,
     onNavigateToCrearHorario: () -> Unit,
     onNavigateToEditarHorario: (String) -> Unit,
-    onNavigateToVerCanchas: () -> Unit
+    onNavigateToVerCanchas: () -> Unit,
+    onNavigateToGestionCoaches: () -> Unit = {}
 ) {
+    val usuarioActual by repository.usuarioActual.collectAsState()
+    val isCoachPrincipal = usuarioActual?.esCoachPrincipal == true
+
     val horarios by repository.horarios.collectAsState()
     val canchas by repository.canchas.collectAsState()
     val ciudades by repository.ciudades.collectAsState()
     val asignaciones by repository.asignaciones.collectAsState()
     val jugadores by repository.jugadores.collectAsState()
+    val usuarios by repository.usuarios.collectAsState()
 
+    val coaches = usuarios.filter { it.rol == Rol.COACH }
+    val coachesMap = coaches.associateBy { it.id }
+
+    var coachFiltroId by remember { mutableStateOf(if (isCoachPrincipal) null else coachId) }
     var horarioAEliminar by remember { mutableStateOf<Horario?>(null) }
 
-    val coachHorarios = remember(horarios, coachId) {
-        horarios.filter { it.coachId == coachId }.sortedWith(compareBy({ it.diaSemana.diaIso }, { it.horaInicio }))
+    val horariosFiltrados = remember(horarios, coachFiltroId, isCoachPrincipal, coachId) {
+        horarios.filter {
+            if (isCoachPrincipal) {
+                if (coachFiltroId == null) true else it.coachId == coachFiltroId
+            } else {
+                it.coachId == coachId
+            }
+        }.sortedWith(compareBy({ it.diaSemana.diaIso }, { it.horaInicio }))
     }
 
     val canchasMap = canchas.associateBy { it.id }
@@ -73,12 +88,28 @@ fun AgendaCoachScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Agenda Semanal", fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Text("Agenda Semanal", fontWeight = FontWeight.Bold)
+                        if (isCoachPrincipal) {
+                            Text(
+                                text = "Supervisión Coach Principal",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
                 actions = {
+                    if (isCoachPrincipal) {
+                        IconButton(onClick = onNavigateToGestionCoaches) {
+                            Icon(Icons.Default.SupervisorAccount, contentDescription = "Gestionar Coaches")
+                        }
+                    }
                     TextButton(onClick = onNavigateToVerCanchas) {
                         Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Ver Canchas")
+                        Text("Canchas")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -94,122 +125,163 @@ fun AgendaCoachScreen(
             }
         }
     ) { paddingValues ->
-        if (coachHorarios.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Aún no tienes horarios configurados en tu agenda semanal.\nPulsa el botón (+) para programar tu primera clase.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp)
+        ) {
+            // Filtro por Coach si es Coach Principal
+            if (isCoachPrincipal) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilterChip(
+                        selected = coachFiltroId == null,
+                        onClick = { coachFiltroId = null },
+                        label = { Text("Todos") }
+                    )
+                    FilterChip(
+                        selected = coachFiltroId == coachId,
+                        onClick = { coachFiltroId = coachId },
+                        label = { Text("Mis Horarios") }
+                    )
+                    coaches.filter { it.id != coachId }.forEach { c ->
+                        FilterChip(
+                            selected = coachFiltroId == c.id,
+                            onClick = { coachFiltroId = if (coachFiltroId == c.id) null else c.id },
+                            label = { Text(c.nombre.split(" ").first()) }
+                        )
+                    }
+                }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
-            ) {
-                // Agrupado por día de la semana (RF-19)
-                DiaSemana.entries.forEach { dia ->
-                    val horariosDelDia = coachHorarios.filter { it.diaSemana == dia }
-                    if (horariosDelDia.isNotEmpty()) {
-                        item {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+
+            if (horariosFiltrados.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No hay horarios configurados en esta vista.\nPulsa el botón (+) para programar una clase.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
+                ) {
+                    // Agrupado por día de la semana (RF-19)
+                    DiaSemana.entries.forEach { dia ->
+                        val horariosDelDia = horariosFiltrados.filter { it.diaSemana == dia }
+                        if (horariosDelDia.isNotEmpty()) {
+                            item {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(
-                                        text = dia.nombreCompleto.uppercase(),
-                                        style = MaterialTheme.typography.labelLarge.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "(${horariosDelDia.size} bloque${if (horariosDelDia.size > 1) "s" else ""})",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                    )
-                                }
-                            }
-                        }
-
-                        items(horariosDelDia) { h ->
-                            val cancha = canchasMap[h.canchaId]
-                            val ciudad = cancha?.let { ciudadesMap[it.ciudadId] }
-                            val asignados = asignaciones.filter { it.horarioId == h.id }
-                            val nombresJugadores = asignados.mapNotNull { jugadoresMap[it.jugadorId]?.nombre }
-
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Default.DateRange,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(20.dp)
+                                        Text(
+                                            text = dia.nombreCompleto.uppercase(),
+                                            style = MaterialTheme.typography.labelLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
                                             )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "${h.horaInicio} - ${h.horaFin}",
-                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                            )
-                                        }
-
-                                        Row {
-                                            IconButton(
-                                                onClick = { onNavigateToEditarHorario(h.id) },
-                                                modifier = Modifier.size(32.dp)
-                                            ) {
-                                                Icon(Icons.Default.Edit, contentDescription = "Editar", modifier = Modifier.size(18.dp))
-                                            }
-                                            IconButton(
-                                                onClick = { horarioAEliminar = h },
-                                                modifier = Modifier.size(32.dp)
-                                            ) {
-                                                Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = TennisRedDestructive, modifier = Modifier.size(18.dp))
-                                            }
-                                        }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "(${horariosDelDia.size} bloque${if (horariosDelDia.size > 1) "s" else ""})",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                        )
                                     }
+                                }
+                            }
 
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = "${cancha?.nombre ?: "Cancha desconocida"} • ${ciudad?.nombre ?: ""}",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                            items(horariosDelDia) { h ->
+                                val cancha = canchasMap[h.canchaId]
+                                val ciudad = cancha?.let { ciudadesMap[it.ciudadId] }
+                                val coachResponsable = coachesMap[h.coachId]
+                                val asignados = asignaciones.filter { it.horarioId == h.id }
+                                val nombresJugadores = asignados.mapNotNull { jugadoresMap[it.jugadorId]?.nombre }
 
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = if (nombresJugadores.isEmpty()) "Sin jugadores asignados aún"
-                                        else "Jugadores: ${nombresJugadores.joinToString(", ")}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (nombresJugadores.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                                    )
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Default.DateRange,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "${h.horaInicio} - ${h.horaFin}",
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                                )
+                                            }
+
+                                            Row {
+                                                IconButton(
+                                                    onClick = { onNavigateToEditarHorario(h.id) },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Edit, contentDescription = "Editar", modifier = Modifier.size(18.dp))
+                                                }
+                                                IconButton(
+                                                    onClick = { horarioAEliminar = h },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = TennisRedDestructive, modifier = Modifier.size(18.dp))
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        if (isCoachPrincipal && coachResponsable != null) {
+                                            Text(
+                                                text = "Coach: ${coachResponsable.nombre}",
+                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.secondary
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "Cancha designada: ${cancha?.nombre ?: "Cancha desconocida"} • ${ciudad?.nombre ?: ""}",
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = if (nombresJugadores.isEmpty()) "Sin jugadores asignados aún"
+                                            else "Jugadores: ${nombresJugadores.joinToString(", ")}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (nombresJugadores.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -228,6 +300,11 @@ fun FormHorarioScreen(
     horarioId: String?,
     onBack: () -> Unit
 ) {
+    val usuarioActual by repository.usuarioActual.collectAsState()
+    val isCoachPrincipal = usuarioActual?.esCoachPrincipal == true
+    val usuarios by repository.usuarios.collectAsState()
+    val coaches = usuarios.filter { it.rol == Rol.COACH }
+
     val horarios by repository.horarios.collectAsState()
     val canchas by repository.canchas.collectAsState()
     val ciudades by repository.ciudades.collectAsState()
@@ -236,6 +313,7 @@ fun FormHorarioScreen(
         horarios.firstOrNull { it.id == horarioId }
     }
 
+    var coachDesignadoId by remember { mutableStateOf(horarioExistente?.coachId ?: coachId) }
     var diaSeleccionado by remember { mutableStateOf(horarioExistente?.diaSemana ?: DiaSemana.LUNES) }
     var canchaSeleccionadaId by remember { mutableStateOf(horarioExistente?.canchaId ?: (canchas.firstOrNull()?.id ?: "")) }
     var horaInicioStr by remember { mutableStateOf(horarioExistente?.horaInicio?.toString() ?: "08:00") }
@@ -278,6 +356,30 @@ fun FormHorarioScreen(
                 }
             }
 
+            // Designación de Coach por parte del Coach Principal (Jorge Sanmartin)
+            if (isCoachPrincipal) {
+                Text("Designar Horario a Coach *", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                coaches.forEach { c ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { coachDesignadoId = c.id },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = coachDesignadoId == c.id,
+                            onClick = { coachDesignadoId = c.id }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "${c.nombre} ${if (c.id == coachId) "(Tú - Coach Principal)" else ""}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+                HorizontalDivider()
+            }
+
             Text("Día de la semana *", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -299,7 +401,7 @@ fun FormHorarioScreen(
                 }
             }
 
-            Text("Cancha *", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+            Text("Cancha Designada *", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
             if (canchas.isEmpty()) {
                 Text("No hay canchas registradas en el sistema por el Administrador.", color = MaterialTheme.colorScheme.error)
             } else {
@@ -352,7 +454,7 @@ fun FormHorarioScreen(
 
                         val res = repository.guardarHorario(
                             id = horarioId,
-                            coachId = coachId,
+                            coachId = if (isCoachPrincipal) coachDesignadoId else coachId,
                             canchaId = canchaSeleccionadaId,
                             diaSemana = diaSeleccionado,
                             horaInicio = inicio,

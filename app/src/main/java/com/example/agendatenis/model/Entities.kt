@@ -54,6 +54,9 @@ data class Usuario(
     val estado: EstadoUsuario = EstadoUsuario.ACTIVO
 )
 
+val Usuario.esCoachPrincipal: Boolean
+    get() = rol == Rol.COACH && (id == "user_coach_1" || nombre.contains("Jorge", ignoreCase = true))
+
 data class Ciudad(
     val id: String,
     val nombre: String
@@ -142,4 +145,11 @@ data class RecordatorioItem(
     val mensaje: String,
     val esMismoDia: Boolean,
     val esVencido: Boolean
+)
+
+data class ResumenCoachGestion(
+    val coach: Usuario,
+    val jugadoresDesignados: List<Jugador>,
+    val horariosDesignados: List<Horario>,
+    val canchasDesignadas: List<Cancha>
 )

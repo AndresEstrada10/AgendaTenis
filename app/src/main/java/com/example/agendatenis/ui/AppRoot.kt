@@ -106,6 +106,9 @@ fun AppRoot(
                                         },
                                         onNavigateToRegistrarPago = { jId ->
                                             currentScreen = Screen.FormPago(jId, null, backScreen = Screen.CoachMain(CoachTab.INICIO))
+                                        },
+                                        onNavigateToGestionCoaches = {
+                                            currentScreen = Screen.GestionCoachesPrincipal(backScreen = Screen.CoachMain(CoachTab.INICIO))
                                         }
                                     )
                                 }
@@ -128,13 +131,16 @@ fun AppRoot(
                                         repository = repository,
                                         coachId = coachId,
                                         onNavigateToCrearHorario = {
-                                            currentScreen = Screen.FormHorario(null, backScreen = Screen.CoachMain(CoachTab.AGENDA))
+                                            currentScreen = Screen.FormHorario(null, coachId = coachId, backScreen = Screen.CoachMain(CoachTab.AGENDA))
                                         },
                                         onNavigateToEditarHorario = { hId ->
-                                            currentScreen = Screen.FormHorario(hId, backScreen = Screen.CoachMain(CoachTab.AGENDA))
+                                            currentScreen = Screen.FormHorario(hId, coachId = coachId, backScreen = Screen.CoachMain(CoachTab.AGENDA))
                                         },
                                         onNavigateToVerCanchas = {
                                             currentScreen = Screen.CanchasCoachView(backScreen = Screen.CoachMain(CoachTab.AGENDA))
+                                        },
+                                        onNavigateToGestionCoaches = {
+                                            currentScreen = Screen.GestionCoachesPrincipal(backScreen = Screen.CoachMain(CoachTab.AGENDA))
                                         }
                                     )
                                 }
@@ -164,6 +170,23 @@ fun AppRoot(
                             }
                         }
                     }
+                }
+
+                // Coach Principal (Jorge): Visualización y administración de coaches, horarios y jugadores designados
+                is Screen.GestionCoachesPrincipal -> {
+                    GestionCoachesPrincipalScreen(
+                        repository = repository,
+                        onBack = { currentScreen = screen.backScreen },
+                        onNavigateToCrearHorarioCoach = { cId ->
+                            currentScreen = Screen.FormHorario(horarioId = null, coachId = cId, backScreen = screen)
+                        },
+                        onNavigateToEditarHorarioCoach = { cId, hId ->
+                            currentScreen = Screen.FormHorario(horarioId = hId, coachId = cId, backScreen = screen)
+                        },
+                        onNavigateToDetalleJugador = { jId ->
+                            currentScreen = Screen.DetalleJugador(jugadorId = jId, backScreen = screen)
+                        }
+                    )
                 }
 
                 // Admin Main Scaffold (Bottom Nav: Inicio, Coaches, Jugadores, Catalogos, Ajustes)
@@ -284,7 +307,7 @@ fun AppRoot(
                 }
 
                 is Screen.FormHorario -> {
-                    val coachId = usuarioActual?.id ?: "user_coach_1"
+                    val coachId = screen.coachId ?: usuarioActual?.id ?: "user_coach_1"
                     FormHorarioScreen(
                         repository = repository,
                         coachId = coachId,

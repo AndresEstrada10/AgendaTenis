@@ -32,8 +32,10 @@ fun CoachHomeScreen(
     repository: AgendaTenisRepository,
     coachId: String,
     onNavigateToDetalleJugador: (String) -> Unit,
-    onNavigateToRegistrarPago: (String) -> Unit
+    onNavigateToRegistrarPago: (String) -> Unit,
+    onNavigateToGestionCoaches: () -> Unit = {}
 ) {
+    val usuarioActual by repository.usuarioActual.collectAsState()
     val bannerMensaje by repository.bannerMensaje.collectAsState()
     val recordatorios = remember(coachId, repository.pagos.collectAsState().value, repository.jugadores.collectAsState().value) {
         repository.obtenerRecordatoriosParaCoach(coachId)
@@ -69,7 +71,7 @@ fun CoachHomeScreen(
                             )
                         )
                         Text(
-                            text = "Panel de Inicio",
+                            text = if (usuarioActual?.esCoachPrincipal == true) "Coach Principal: ${usuarioActual?.nombre}" else "Panel de Inicio",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -101,6 +103,59 @@ fun CoachHomeScreen(
                         mensaje = bannerMensaje ?: "",
                         onDismiss = { repository.setBannerMensaje(null) }
                     )
+                }
+            }
+
+            // PANEL COACH PRINCIPAL (Jorge Sanmartin): Visualización y administración de coaches
+            if (usuarioActual?.esCoachPrincipal == true) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToGestionCoaches() },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(TennisGreenPrimary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SupervisorAccount,
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Gestión de Coaches y Equipo",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = "Visualiza coaches, supervisa horarios, jugadores y canchas designadas.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ArrowForward,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
                 }
             }
 
@@ -292,16 +347,32 @@ fun JugadoresListScreen(
     onNavigateToDetalleJugador: (String) -> Unit,
     onNavigateToCrearJugador: () -> Unit
 ) {
+    val usuarioActual by repository.usuarioActual.collectAsState()
+    val isCoachPrincipal = usuarioActual?.esCoachPrincipal == true
+
     var searchQuery by remember { mutableStateOf("") }
+    var coachFiltroId by remember { mutableStateOf(if (isCoachPrincipal) null else coachId) }
+    var jugadorParaReasignar by remember { mutableStateOf<Jugador?>(null) }
+
     val jugadores by repository.jugadores.collectAsState()
+    val usuarios by repository.usuarios.collectAsState()
     val planes by repository.planes.collectAsState()
     val horarios by repository.horarios.collectAsState()
     val asignaciones by repository.asignaciones.collectAsState()
     val pagos by repository.pagos.collectAsState()
 
-    val coachJugadores = remember(jugadores, coachId, searchQuery) {
+    val coaches = usuarios.filter { it.rol == Rol.COACH }
+    val coachesMap = coaches.associateBy { it.id }
+
+    val jugadoresMostrados = remember(jugadores, coachFiltroId, isCoachPrincipal, coachId, searchQuery) {
         jugadores
-            .filter { it.coachId == coachId }
+            .filter {
+                if (isCoachPrincipal) {
+                    if (coachFiltroId == null) true else it.coachId == coachFiltroId
+                } else {
+                    it.coachId == coachId
+                }
+            }
             .filter {
                 if (searchQuery.isBlank()) true
                 else it.nombre.contains(searchQuery, ignoreCase = true) || it.telefono.contains(searchQuery)
@@ -309,10 +380,67 @@ fun JugadoresListScreen(
             .sortedBy { it.nombre }
     }
 
+    // Modal de Reasignación de Jugador para Coach Principal
+    if (jugadorParaReasignar != null) {
+        val jug = jugadorParaReasignar!!
+        AlertDialog(
+            onDismissRequest = { jugadorParaReasignar = null },
+            title = { Text("Reasignar Coach a ${jug.nombre}") },
+            text = {
+                Column {
+                    Text(
+                        text = "Selecciona el coach responsable de este jugador:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    coaches.forEach { c ->
+                        val isCurrent = c.id == jug.coachId
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    repository.reasignarCoachAJugador(jug.id, c.id)
+                                    jugadorParaReasignar = null
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isCurrent,
+                                onClick = {
+                                    repository.reasignarCoachAJugador(jug.id, c.id)
+                                    jugadorParaReasignar = null
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "${c.nombre} ${if (isCurrent) "(Actual)" else ""}")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { jugadorParaReasignar = null }) {
+                    Text("Cerrar")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Jugadores", fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Text("Jugadores", fontWeight = FontWeight.Bold)
+                        if (isCoachPrincipal) {
+                            Text(
+                                text = "Supervisión Coach Principal",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
@@ -340,7 +468,35 @@ fun JugadoresListScreen(
                 modifier = Modifier.padding(vertical = 8.dp)
             )
 
-            if (coachJugadores.isEmpty()) {
+            // Selector de filtro de coach si es Coach Principal
+            if (isCoachPrincipal) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilterChip(
+                        selected = coachFiltroId == null,
+                        onClick = { coachFiltroId = null },
+                        label = { Text("Todos") }
+                    )
+                    FilterChip(
+                        selected = coachFiltroId == coachId,
+                        onClick = { coachFiltroId = coachId },
+                        label = { Text("Mis Jugadores") }
+                    )
+                    coaches.filter { it.id != coachId }.forEach { c ->
+                        FilterChip(
+                            selected = coachFiltroId == c.id,
+                            onClick = { coachFiltroId = if (coachFiltroId == c.id) null else c.id },
+                            label = { Text(c.nombre.split(" ").first()) }
+                        )
+                    }
+                }
+            }
+
+            if (jugadoresMostrados.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -348,7 +504,7 @@ fun JugadoresListScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (searchQuery.isBlank()) "No tienes jugadores registrados aún. Pulsa el botón (+) para agregar uno."
+                        text = if (searchQuery.isBlank()) "No hay jugadores registrados en esta vista."
                         else "No se encontraron jugadores que coincidan con la búsqueda.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -360,7 +516,8 @@ fun JugadoresListScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(bottom = 80.dp, top = 4.dp)
                 ) {
-                    items(coachJugadores) { jugador ->
+                    items(jugadoresMostrados) { jugador ->
+                        val coach = coachesMap[jugador.coachId]
                         val plan = planes.firstOrNull { it.id == jugador.planId }
                         val jugadorAsignaciones = asignaciones.filter { it.jugadorId == jugador.id }
                         val jugadorHorarios = horarios.filter { h -> jugadorAsignaciones.any { it.horarioId == h.id } }
@@ -388,7 +545,6 @@ fun JugadoresListScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Avatar con iniciales
                                     AvatarConIniciales(nombre = jugador.nombre, size = 44.dp)
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
@@ -438,11 +594,32 @@ fun JugadoresListScreen(
                                             }
                                         }
 
-                                        Text(
-                                            text = plan?.nombre ?: "Sin plan asignado",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = if (isCoachPrincipal && coach != null) "Coach: ${coach.nombre} • ${plan?.nombre ?: "Sin plan"}"
+                                                else plan?.nombre ?: "Sin plan asignado",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+
+                                            if (isCoachPrincipal) {
+                                                IconButton(
+                                                    onClick = { jugadorParaReasignar = jugador },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Refresh,
+                                                        contentDescription = "Reasignar Coach",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
 

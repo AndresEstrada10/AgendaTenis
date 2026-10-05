@@ -30,6 +30,32 @@ class BusinessRulesTest {
     }
 
     @Test
+    fun testCoachPrincipalPermisosYGestion() {
+        val coachJorge = repository.usuarios.value.first { it.id == "user_coach_1" }
+        assertTrue(coachJorge.esCoachPrincipal)
+
+        val coachMariana = repository.usuarios.value.first { it.id == "user_coach_2" }
+        assertFalse(coachMariana.esCoachPrincipal)
+
+        // Resumen de gestión para Coach Principal (coaches, jugadores, horarios y canchas designadas)
+        val resumen = repository.obtenerResumenCoachesGestion()
+        assertTrue(resumen.isNotEmpty())
+        val resumenJorge = resumen.first { it.coach.id == "user_coach_1" }
+        assertTrue(resumenJorge.jugadoresDesignados.isNotEmpty())
+        assertTrue(resumenJorge.horariosDesignados.isNotEmpty())
+        assertTrue(resumenJorge.canchasDesignadas.isNotEmpty())
+
+        // Reasignación de jugador a Mariana por parte del Coach Principal
+        val reasigRes = repository.reasignarCoachAJugador("jug_1", "user_coach_2")
+        assertTrue(reasigRes.isSuccess)
+        val j1Actualizado = repository.jugadores.value.first { it.id == "jug_1" }
+        assertEquals("user_coach_2", j1Actualizado.coachId)
+
+        // Regresar a Jorge
+        repository.reasignarCoachAJugador("jug_1", "user_coach_1")
+    }
+
+    @Test
     fun testRN03_RN04_calculoFechaAnclaYProximaFecha() {
         // Para jugador 1 (Angel Veliz, tiene 2 pagos), la proximaFecha debe ser fechaAncla + 2 meses
         val calcJ1 = repository.calcularEstadoPago("jug_1")

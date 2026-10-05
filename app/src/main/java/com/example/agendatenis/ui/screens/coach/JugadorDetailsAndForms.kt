@@ -44,6 +44,7 @@ fun DetalleJugadorScreen(
     val horarios by repository.horarios.collectAsState()
     val asignaciones by repository.asignaciones.collectAsState()
     val pagos by repository.pagos.collectAsState()
+    val usuarios by repository.usuarios.collectAsState()
 
     val jugador = jugadores.firstOrNull { it.id == jugadorId }
 
@@ -76,6 +77,7 @@ fun DetalleJugadorScreen(
         return
     }
 
+    val coachAsignado = usuarios.firstOrNull { it.id == jugador.coachId }
     val plan = planes.firstOrNull { it.id == jugador.planId }
     val jugadorAsignaciones = asignaciones.filter { it.jugadorId == jugador.id }
     val jugadorHorarios = horarios.filter { h -> jugadorAsignaciones.any { it.horarioId == h.id } }
@@ -193,6 +195,12 @@ fun DetalleJugadorScreen(
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Coach a cargo: ${coachAsignado?.nombre ?: "No asignado"}",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = if (jugador.estado == EstadoJugador.ACTIVO) "Estado: Activo" else "Estado: Inactivo",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
@@ -460,6 +468,11 @@ fun FormJugadorScreen(
     jugadorId: String?,
     onBack: () -> Unit
 ) {
+    val usuarioActual by repository.usuarioActual.collectAsState()
+    val isCoachPrincipal = usuarioActual?.esCoachPrincipal == true
+    val usuarios by repository.usuarios.collectAsState()
+    val coaches = usuarios.filter { it.rol == Rol.COACH }
+
     val jugadores by repository.jugadores.collectAsState()
     val planes by repository.planes.collectAsState()
     val horarios by repository.horarios.collectAsState()
@@ -470,10 +483,11 @@ fun FormJugadorScreen(
         jugadores.firstOrNull { it.id == jugadorId }
     }
 
+    var coachDesignadoId by remember { mutableStateOf(jugadorExistente?.coachId ?: coachId) }
     var nombre by remember { mutableStateOf(jugadorExistente?.nombre ?: "") }
     var telefono by remember { mutableStateOf(jugadorExistente?.telefono ?: "") }
     var fechaInicioStr by remember { mutableStateOf(jugadorExistente?.fechaInicio?.toString() ?: LocalDate.now().toString()) }
-    var planSeleccionadoId by remember { mutableStateOf(jugadorExistente?.planId ?: (planes.firstOrNull { it.coachId == coachId }?.id ?: "")) }
+    var planSeleccionadoId by remember { mutableStateOf(jugadorExistente?.planId ?: (planes.firstOrNull { it.coachId == coachDesignadoId }?.id ?: "")) }
 
     // Horarios asignados
     val initialHorarios = remember(jugadorExistente, asignaciones) {
@@ -487,8 +501,8 @@ fun FormJugadorScreen(
 
     var mensajeError by remember { mutableStateOf<String?>(null) }
 
-    val coachPlanes = planes.filter { it.coachId == coachId }
-    val coachHorarios = horarios.filter { it.coachId == coachId }
+    val coachPlanes = planes.filter { it.coachId == coachDesignadoId }
+    val coachHorarios = horarios.filter { it.coachId == coachDesignadoId }
     val planActual = planes.firstOrNull { it.id == planSeleccionadoId }
 
     // RN-15: advertencia si dias asignados != clasesPorSemana del plan
@@ -529,6 +543,44 @@ fun FormJugadorScreen(
                 }
             }
 
+            // Designación de Coach por parte del Coach Principal (Jorge Sanmartin)
+            if (isCoachPrincipal) {
+                Text(
+                    text = "Coach Designado *",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                )
+                coaches.forEach { c ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                coachDesignadoId = c.id
+                                // reset plan if not matching
+                                if (!planes.any { it.id == planSeleccionadoId && it.coachId == c.id }) {
+                                    planSeleccionadoId = planes.firstOrNull { it.coachId == c.id }?.id ?: ""
+                                }
+                            },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = coachDesignadoId == c.id,
+                            onClick = {
+                                coachDesignadoId = c.id
+                                if (!planes.any { it.id == planSeleccionadoId && it.coachId == c.id }) {
+                                    planSeleccionadoId = planes.firstOrNull { it.coachId == c.id }?.id ?: ""
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "${c.nombre} ${if (c.id == coachId) "(Tú - Coach Principal)" else ""}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            }
+
             OutlinedTextField(
                 value = nombre,
                 onValueChange = { nombre = it },
@@ -563,7 +615,7 @@ fun FormJugadorScreen(
 
             if (coachPlanes.isEmpty()) {
                 Text(
-                    text = "Aún no has creado planes. Ve a la pestaña 'Planes' para agregar uno antes de asignar a este jugador.",
+                    text = "Aún no hay planes creados para este coach.",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -596,7 +648,7 @@ fun FormJugadorScreen(
 
             if (coachHorarios.isEmpty()) {
                 Text(
-                    text = "No tienes horarios configurados en tu Agenda. Puedes agregarlos luego en la sección Agenda.",
+                    text = "No hay horarios configurados para este coach. Puedes programarlos en la sección Agenda o Gestión de Coaches.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -673,7 +725,7 @@ fun FormJugadorScreen(
                             telefono = telefono,
                             fechaInicio = fechaInicio,
                             planId = planSeleccionadoId,
-                            coachId = coachId,
+                            coachId = if (isCoachPrincipal) coachDesignadoId else coachId,
                             horariosIds = horariosSeleccionados.toList()
                         )
                         res.onSuccess {
