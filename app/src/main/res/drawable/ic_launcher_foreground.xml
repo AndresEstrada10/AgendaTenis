@@ -1,30 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:pathData="M31,63.928c0,0 6.4,-11 12.1,-13.1c7.2,-2.6 26,-1.4 26,-1.4l38.1,38.1L107,108.928l-32,-1L31,63.928z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:endX="85.84757"
-                android:endY="92.4963"
-                android:startX="42.9492"
-                android:startY="49.59793"
-                android:type="linear">
-                <item
-                    android:color="#44000000"
-                    android:offset="0.0" />
-                <item
-                    android:color="#00000000"
-                    android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
+
+    <!-- Sombra sutil de la raqueta y pelota -->
     <path
-        android:fillColor="#FFFFFF"
-        android:fillType="nonZero"
-        android:pathData="M65.3,45.828l3.8,-6.6c0.2,-0.4 0.1,-0.9 -0.3,-1.1c-0.4,-0.2 -0.9,-0.1 -1.1,0.3l-3.9,6.7c-6.3,-2.8 -13.4,-2.8 -19.7,0l-3.9,-6.7c-0.2,-0.4 -0.7,-0.5 -1.1,-0.3C38.8,38.328 38.7,38.828 38.9,39.228l3.8,6.6C36.2,49.428 31.7,56.028 31,63.928h46C76.3,56.028 71.8,49.428 65.3,45.828zM43.4,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2c-0.3,-0.7 -0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C45.3,56.528 44.5,57.328 43.4,57.328L43.4,57.328zM64.6,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2s-0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C66.5,56.528 65.6,57.328 64.6,57.328L64.6,57.328z"
-        android:strokeWidth="1"
-        android:strokeColor="#00000000" />
+        android:fillColor="#33000000"
+        android:pathData="M38,82 C42,86 66,74 74,62 C78,56 70,52 64,56 C56,62 34,78 38,82 Z" />
+
+    <!-- Raqueta de tenis en ángulo -->
+    <group
+        android:pivotX="50"
+        android:pivotY="52"
+        android:rotation="-35">
+
+        <!-- Mango de la raqueta -->
+        <path
+            android:fillColor="#E0E0E0"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.2"
+            android:pathData="M47,56 L53,56 L53,84 L47,84 Z" />
+
+        <!-- Grip del mango (detalles de cinta) -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#B0BEC5"
+            android:strokeWidth="1"
+            android:pathData="M47,62 L53,60 M47,68 L53,66 M47,74 L53,72 M47,80 L53,78" />
+
+        <!-- Tapa base del mango (Butt cap) -->
+        <path
+            android:fillColor="#1B5E20"
+            android:pathData="M46,84 L54,84 L53,87 L47,87 Z" />
+
+        <!-- Garganta / Cuello de la raqueta -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M47,56 L50,46 L53,56 Z" />
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="3.2"
+            android:strokeLineJoin="round"
+            android:pathData="M48,56 L42,46 M52,56 L58,46" />
+
+        <!-- Cuerdas de la raqueta (Encordado) -->
+        <!-- Líneas verticales -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#80FFFFFF"
+            android:strokeWidth="0.8"
+            android:pathData="M42,20 L42,42 M46,17 L46,45 M50,16 L50,46 M54,17 L54,45 M58,20 L58,42" />
+        <!-- Líneas horizontales -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#80FFFFFF"
+            android:strokeWidth="0.8"
+            android:pathData="M39,22 L61,22 M37,27 L63,27 M36,32 L64,32 M37,37 L63,37 M39,42 L61,42" />
+
+        <!-- Aro / Cabeza de la raqueta (Marco blanco resistente) -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="3.6"
+            android:pathData="M50,15 C41,15 35,22 35,31 C35,40 41,47 50,47 C59,47 65,40 65,31 C65,22 59,15 50,15 Z" />
+
+        <!-- Borde decorativo amarillo tenis en el aro -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FBC02D"
+            android:strokeWidth="1.2"
+            android:pathData="M37,25 C36,29 36,33 37,37 M63,25 C64,29 64,33 63,37" />
+    </group>
+
+    <!-- Pelota de tenis en primer plano -->
+    <group
+        android:pivotX="64"
+        android:pivotY="58">
+        <!-- Cuerpo de la pelota (Amarillo Tenis Oficial) -->
+        <path
+            android:fillColor="#FBC02D"
+            android:pathData="M64,44 C71.73,44 78,50.27 78,58 C78,65.73 71.73,72 64,72 C56.27,72 50,65.73 50,58 C50,50.27 56.27,44 64,44 Z" />
+
+        <!-- Costura curva izquierda de la pelota (Blanca) -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.6"
+            android:strokeLineCap="round"
+            android:pathData="M56,47 C60,52 60,64 56,69" />
+
+        <!-- Costura curva derecha de la pelota (Blanca) -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.6"
+            android:strokeLineCap="round"
+            android:pathData="M72,47 C68,52 68,64 72,69" />
+
+        <!-- Brillo sutil superior de la pelota -->
+        <path
+            android:fillColor="#40FFFFFF"
+            android:pathData="M60,46 C64,46 66,48 66,50 C63,49 61,48 59,49 C59,47 60,46 60,46 Z" />
+    </group>
 </vector>

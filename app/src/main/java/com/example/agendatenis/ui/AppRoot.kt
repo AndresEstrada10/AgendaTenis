@@ -6,6 +6,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.agendatenis.model.Rol
 import com.example.agendatenis.model.TemaApp
 import com.example.agendatenis.navigation.*
@@ -19,13 +25,12 @@ import com.example.agendatenis.ui.theme.AgendaTenisTheme
 
 @Composable
 fun AppRoot(
-    repository: AgendaTenisRepository = AgendaTenisRepository.getInstance()
+    repository: AgendaTenisRepository = AgendaTenisRepository.getInstance(),
+    navController: NavHostController = rememberNavController()
 ) {
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
     val usuarioActual by repository.usuarioActual.collectAsState()
     val configs by repository.configs.collectAsState()
 
-    // Manejo de tema según configuración del usuario (o sistema por defecto)
     val configUsuario = usuarioActual?.let { configs[it.id] }
     val isDark = when (configUsuario?.tema) {
         TemaApp.OSCURO -> true
@@ -38,48 +43,73 @@ fun AppRoot(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            when (val screen = currentScreen) {
-                is Screen.Splash -> {
+            NavHost(
+                navController = navController,
+                startDestination = Routes.SPLASH
+            ) {
+                // 1. Splash
+                composable(Routes.SPLASH) {
                     SplashScreen(
                         onTimeout = {
                             val user = repository.usuarioActual.value
-                            currentScreen = if (user != null) {
-                                if (user.rol == Rol.ADMIN) Screen.AdminMain() else Screen.CoachMain()
+                            val destination = if (user != null) {
+                                if (user.rol == Rol.ADMIN) Routes.adminMain() else Routes.coachMain()
                             } else {
-                                Screen.Login
+                                Routes.LOGIN
+                            }
+                            navController.navigate(destination) {
+                                popUpTo(Routes.SPLASH) { inclusive = true }
                             }
                         }
                     )
                 }
 
-                is Screen.Login -> {
+                // 2. Login
+                composable(Routes.LOGIN) {
                     LoginScreen(
                         repository = repository,
                         onLoginSuccess = { user ->
-                            currentScreen = if (user.rol == Rol.ADMIN) Screen.AdminMain() else Screen.CoachMain()
+                            val destination = if (user.rol == Rol.ADMIN) Routes.adminMain() else Routes.coachMain()
+                            navController.navigate(destination) {
+                                popUpTo(Routes.LOGIN) { inclusive = true }
+                            }
                         },
                         onNavigateToRegistro = {
-                            currentScreen = Screen.Registro
+                            navController.navigate(Routes.REGISTRO)
                         }
                     )
                 }
 
-                is Screen.Registro -> {
+                // 3. Registro
+                composable(Routes.REGISTRO) {
                     RegistroScreen(
                         repository = repository,
-                        onRegistroSuccess = { coach ->
-                            currentScreen = Screen.CoachMain()
+                        onRegistroSuccess = {
+                            navController.navigate(Routes.coachMain()) {
+                                popUpTo(Routes.REGISTRO) { inclusive = true }
+                            }
                         },
                         onNavigateToLogin = {
-                            currentScreen = Screen.Login
+                            navController.popBackStack()
                         }
                     )
                 }
 
-                // Coach Main Scaffold (Bottom Nav: Inicio, Jugadores, Agenda, Planes, Ajustes)
-                is Screen.CoachMain -> {
+                // 4. Coach Main Scaffold (Tabs: Inicio, Jugadores, Agenda, Planes, Ajustes)
+                composable(
+                    route = Routes.COACH_MAIN,
+                    arguments = listOf(
+                        navArgument("tab") {
+                            type = NavType.StringType
+                            defaultValue = CoachTab.INICIO.name
+                            nullable = true
+                        }
+                    )
+                ) { backStackEntry ->
+                    val tabName = backStackEntry.arguments?.getString("tab")
+                    val initialTab = CoachTab.entries.firstOrNull { it.name == tabName } ?: CoachTab.INICIO
                     val coachId = usuarioActual?.id ?: "user_coach_1"
-                    var selectedTab by remember { mutableStateOf(screen.tab) }
+                    var selectedTab by remember(tabName) { mutableStateOf(initialTab) }
 
                     Scaffold(
                         bottomBar = {
@@ -102,13 +132,13 @@ fun AppRoot(
                                         repository = repository,
                                         coachId = coachId,
                                         onNavigateToDetalleJugador = { jId ->
-                                            currentScreen = Screen.DetalleJugador(jId, backScreen = Screen.CoachMain(CoachTab.INICIO))
+                                            navController.navigate(Routes.detalleJugador(jId))
                                         },
                                         onNavigateToRegistrarPago = { jId ->
-                                            currentScreen = Screen.FormPago(jId, null, backScreen = Screen.CoachMain(CoachTab.INICIO))
+                                            navController.navigate(Routes.formPago(jId))
                                         },
                                         onNavigateToGestionCoaches = {
-                                            currentScreen = Screen.GestionCoachesPrincipal(backScreen = Screen.CoachMain(CoachTab.INICIO))
+                                            navController.navigate(Routes.GESTION_COACHES_PRINCIPAL)
                                         }
                                     )
                                 }
@@ -118,10 +148,10 @@ fun AppRoot(
                                         repository = repository,
                                         coachId = coachId,
                                         onNavigateToDetalleJugador = { jId ->
-                                            currentScreen = Screen.DetalleJugador(jId, backScreen = Screen.CoachMain(CoachTab.JUGADORES))
+                                            navController.navigate(Routes.detalleJugador(jId))
                                         },
                                         onNavigateToCrearJugador = {
-                                            currentScreen = Screen.FormJugador(null, backScreen = Screen.CoachMain(CoachTab.JUGADORES))
+                                            navController.navigate(Routes.formJugador())
                                         }
                                     )
                                 }
@@ -131,16 +161,16 @@ fun AppRoot(
                                         repository = repository,
                                         coachId = coachId,
                                         onNavigateToCrearHorario = {
-                                            currentScreen = Screen.FormHorario(null, coachId = coachId, backScreen = Screen.CoachMain(CoachTab.AGENDA))
+                                            navController.navigate(Routes.formHorario(coachId = coachId))
                                         },
                                         onNavigateToEditarHorario = { hId ->
-                                            currentScreen = Screen.FormHorario(hId, coachId = coachId, backScreen = Screen.CoachMain(CoachTab.AGENDA))
+                                            navController.navigate(Routes.formHorario(coachId = coachId, horarioId = hId))
                                         },
                                         onNavigateToVerCanchas = {
-                                            currentScreen = Screen.CanchasCoachView(backScreen = Screen.CoachMain(CoachTab.AGENDA))
+                                            navController.navigate(Routes.CANCHAS_COACH)
                                         },
                                         onNavigateToGestionCoaches = {
-                                            currentScreen = Screen.GestionCoachesPrincipal(backScreen = Screen.CoachMain(CoachTab.AGENDA))
+                                            navController.navigate(Routes.GESTION_COACHES_PRINCIPAL)
                                         }
                                     )
                                 }
@@ -150,10 +180,10 @@ fun AppRoot(
                                         repository = repository,
                                         coachId = coachId,
                                         onNavigateToCrearPlan = {
-                                            currentScreen = Screen.FormPlan(null, coachId, backScreen = Screen.CoachMain(CoachTab.PLANES))
+                                            navController.navigate(Routes.formPlan(coachId = coachId))
                                         },
                                         onNavigateToEditarPlan = { pId ->
-                                            currentScreen = Screen.FormPlan(pId, coachId, backScreen = Screen.CoachMain(CoachTab.PLANES))
+                                            navController.navigate(Routes.formPlan(coachId = coachId, planId = pId))
                                         }
                                     )
                                 }
@@ -163,7 +193,9 @@ fun AppRoot(
                                         repository = repository,
                                         coachId = coachId,
                                         onLogout = {
-                                            currentScreen = Screen.Login
+                                            navController.navigate(Routes.LOGIN) {
+                                                popUpTo(0) { inclusive = true }
+                                            }
                                         }
                                     )
                                 }
@@ -172,27 +204,38 @@ fun AppRoot(
                     }
                 }
 
-                // Coach Principal (Jorge): Visualización y administración de coaches, horarios y jugadores designados
-                is Screen.GestionCoachesPrincipal -> {
+                // 5. Coach Principal (Jorge): Gestión y asignación de coaches
+                composable(Routes.GESTION_COACHES_PRINCIPAL) {
                     GestionCoachesPrincipalScreen(
                         repository = repository,
-                        onBack = { currentScreen = screen.backScreen },
+                        onBack = { navController.popBackStack() },
                         onNavigateToCrearHorarioCoach = { cId ->
-                            currentScreen = Screen.FormHorario(horarioId = null, coachId = cId, backScreen = screen)
+                            navController.navigate(Routes.formHorario(coachId = cId))
                         },
                         onNavigateToEditarHorarioCoach = { cId, hId ->
-                            currentScreen = Screen.FormHorario(horarioId = hId, coachId = cId, backScreen = screen)
+                            navController.navigate(Routes.formHorario(coachId = cId, horarioId = hId))
                         },
                         onNavigateToDetalleJugador = { jId ->
-                            currentScreen = Screen.DetalleJugador(jugadorId = jId, backScreen = screen)
+                            navController.navigate(Routes.detalleJugador(jId))
                         }
                     )
                 }
 
-                // Admin Main Scaffold (Bottom Nav: Inicio, Coaches, Jugadores, Catalogos, Ajustes)
-                is Screen.AdminMain -> {
+                // 6. Admin Main Scaffold (Tabs: Inicio, Coaches, Jugadores, Catalogos, Ajustes)
+                composable(
+                    route = Routes.ADMIN_MAIN,
+                    arguments = listOf(
+                        navArgument("tab") {
+                            type = NavType.StringType
+                            defaultValue = AdminTab.INICIO.name
+                            nullable = true
+                        }
+                    )
+                ) { backStackEntry ->
+                    val tabName = backStackEntry.arguments?.getString("tab")
+                    val initialTab = AdminTab.entries.firstOrNull { it.name == tabName } ?: AdminTab.INICIO
                     val adminId = usuarioActual?.id ?: "user_admin_1"
-                    var selectedTab by remember { mutableStateOf(screen.tab) }
+                    var selectedTab by remember(tabName) { mutableStateOf(initialTab) }
 
                     Scaffold(
                         bottomBar = {
@@ -223,10 +266,10 @@ fun AppRoot(
                                     AdminCoachesScreen(
                                         repository = repository,
                                         onNavigateToCrearCoach = {
-                                            currentScreen = Screen.AdminFormCoach(null, backScreen = Screen.AdminMain(AdminTab.COACHES))
+                                            navController.navigate(Routes.adminFormCoach())
                                         },
                                         onNavigateToEditarCoach = { cId ->
-                                            currentScreen = Screen.AdminFormCoach(cId, backScreen = Screen.AdminMain(AdminTab.COACHES))
+                                            navController.navigate(Routes.adminFormCoach(cId))
                                         }
                                     )
                                 }
@@ -235,7 +278,7 @@ fun AppRoot(
                                     AdminJugadoresScreen(
                                         repository = repository,
                                         onNavigateToDetalleJugador = { jId ->
-                                            currentScreen = Screen.DetalleJugador(jId, backScreen = Screen.AdminMain(AdminTab.JUGADORES))
+                                            navController.navigate(Routes.detalleJugador(jId))
                                         }
                                     )
                                 }
@@ -251,7 +294,9 @@ fun AppRoot(
                                         repository = repository,
                                         adminId = adminId,
                                         onLogout = {
-                                            currentScreen = Screen.Login
+                                            navController.navigate(Routes.LOGIN) {
+                                                popUpTo(0) { inclusive = true }
+                                            }
                                         }
                                     )
                                 }
@@ -260,85 +305,147 @@ fun AppRoot(
                     }
                 }
 
-                // Sub-pantallas Coach / Compartidas
-                is Screen.DetalleJugador -> {
+                // 7. Detalle de Jugador
+                composable(
+                    route = Routes.DETALLE_JUGADOR,
+                    arguments = listOf(
+                        navArgument("jugadorId") { type = NavType.StringType }
+                    )
+                ) { backStackEntry ->
+                    val jugadorId = backStackEntry.arguments?.getString("jugadorId") ?: ""
                     DetalleJugadorScreen(
                         repository = repository,
-                        jugadorId = screen.jugadorId,
-                        onBack = { currentScreen = screen.backScreen },
+                        jugadorId = jugadorId,
+                        onBack = { navController.popBackStack() },
                         onNavigateToEditarJugador = { jId ->
-                            currentScreen = Screen.FormJugador(jId, backScreen = screen)
+                            navController.navigate(Routes.formJugador(jId))
                         },
                         onNavigateToRegistrarPago = { jId ->
-                            currentScreen = Screen.FormPago(jId, null, backScreen = screen)
+                            navController.navigate(Routes.formPago(jId))
                         },
                         onNavigateToEditarPago = { jId, pId ->
-                            currentScreen = Screen.FormPago(jId, pId, backScreen = screen)
+                            navController.navigate(Routes.formPago(jId, pId))
                         }
                     )
                 }
 
-                is Screen.FormJugador -> {
+                // 8. Formulario de Jugador (Crear / Editar)
+                composable(
+                    route = Routes.FORM_JUGADOR,
+                    arguments = listOf(
+                        navArgument("jugadorId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    val jugadorId = backStackEntry.arguments?.getString("jugadorId")
                     val coachId = usuarioActual?.id ?: "user_coach_1"
                     FormJugadorScreen(
                         repository = repository,
                         coachId = coachId,
-                        jugadorId = screen.jugadorId,
-                        onBack = { currentScreen = screen.backScreen }
+                        jugadorId = jugadorId,
+                        onBack = { navController.popBackStack() }
                     )
                 }
 
-                is Screen.FormPago -> {
+                // 9. Formulario de Pago (Registrar / Editar)
+                composable(
+                    route = Routes.FORM_PAGO,
+                    arguments = listOf(
+                        navArgument("jugadorId") { type = NavType.StringType },
+                        navArgument("pagoId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    val jugadorId = backStackEntry.arguments?.getString("jugadorId") ?: ""
+                    val pagoId = backStackEntry.arguments?.getString("pagoId")
                     FormPagoScreen(
                         repository = repository,
-                        jugadorId = screen.jugadorId,
-                        pagoId = screen.pagoId,
-                        onBack = { currentScreen = screen.backScreen }
+                        jugadorId = jugadorId,
+                        pagoId = pagoId,
+                        onBack = { navController.popBackStack() }
                     )
                 }
 
-                is Screen.FormPlan -> {
+                // 10. Formulario de Plan (Crear / Editar)
+                composable(
+                    route = Routes.FORM_PLAN,
+                    arguments = listOf(
+                        navArgument("coachId") { type = NavType.StringType },
+                        navArgument("planId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    val coachId = backStackEntry.arguments?.getString("coachId") ?: (usuarioActual?.id ?: "user_coach_1")
+                    val planId = backStackEntry.arguments?.getString("planId")
                     FormPlanScreen(
                         repository = repository,
-                        coachId = screen.coachId,
-                        planId = screen.planId,
-                        onBack = { currentScreen = screen.backScreen }
+                        coachId = coachId,
+                        planId = planId,
+                        onBack = { navController.popBackStack() }
                     )
                 }
 
-                is Screen.FormHorario -> {
-                    val coachId = screen.coachId ?: usuarioActual?.id ?: "user_coach_1"
+                // 11. Formulario de Horario (Crear / Editar)
+                composable(
+                    route = Routes.FORM_HORARIO,
+                    arguments = listOf(
+                        navArgument("coachId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                        navArgument("horarioId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    val paramCoachId = backStackEntry.arguments?.getString("coachId")
+                    val coachId = paramCoachId ?: (usuarioActual?.id ?: "user_coach_1")
+                    val horarioId = backStackEntry.arguments?.getString("horarioId")
                     FormHorarioScreen(
                         repository = repository,
                         coachId = coachId,
-                        horarioId = screen.horarioId,
-                        onBack = { currentScreen = screen.backScreen }
+                        horarioId = horarioId,
+                        onBack = { navController.popBackStack() }
                     )
                 }
 
-                is Screen.CanchasCoachView -> {
+                // 12. Visualización de Canchas para Coach
+                composable(Routes.CANCHAS_COACH) {
                     CanchasCoachScreen(
                         repository = repository,
-                        onBack = { currentScreen = screen.backScreen }
+                        onBack = { navController.popBackStack() }
                     )
                 }
 
-                is Screen.AdminFormCoach -> {
+                // 13. Formulario de Coach en Admin (Crear / Editar)
+                composable(
+                    route = Routes.ADMIN_FORM_COACH,
+                    arguments = listOf(
+                        navArgument("coachId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    val coachId = backStackEntry.arguments?.getString("coachId")
                     AdminFormCoachScreen(
                         repository = repository,
-                        coachId = screen.coachId,
-                        onBack = { currentScreen = screen.backScreen }
+                        coachId = coachId,
+                        onBack = { navController.popBackStack() }
                     )
-                }
-
-                is Screen.AdminFormCiudad -> {
-                    // Handled within AdminCatalogosScreen dialogs
-                    currentScreen = screen.backScreen
-                }
-
-                is Screen.AdminFormCancha -> {
-                    // Handled within AdminCatalogosScreen dialogs
-                    currentScreen = screen.backScreen
                 }
             }
         }
