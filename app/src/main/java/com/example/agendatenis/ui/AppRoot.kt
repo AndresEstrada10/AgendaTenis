@@ -12,6 +12,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.agendatenis.model.esCoachPrincipal
 import com.example.agendatenis.model.Rol
 import com.example.agendatenis.model.TemaApp
 import com.example.agendatenis.navigation.*
@@ -43,6 +44,22 @@ fun AppRoot(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
+            val gestionCoachesContent: @Composable (() -> Unit) -> Unit = { onBack ->
+                GestionCoachesPrincipalScreen(
+                    repository = repository,
+                    onBack = onBack,
+                    onNavigateToCrearHorarioCoach = { cId ->
+                        navController.navigate(Routes.formHorario(coachId = cId))
+                    },
+                    onNavigateToEditarHorarioCoach = { cId, hId ->
+                        navController.navigate(Routes.formHorario(coachId = cId, horarioId = hId))
+                    },
+                    onNavigateToDetalleJugador = { jId ->
+                        navController.navigate(Routes.detalleJugador(jId))
+                    }
+                )
+            }
+
             NavHost(
                 navController = navController,
                 startDestination = Routes.SPLASH
@@ -95,7 +112,7 @@ fun AppRoot(
                     )
                 }
 
-                // 4. Coach Main Scaffold (Tabs: Inicio, Jugadores, Agenda, Planes, Ajustes)
+                // 4. Coach Main Scaffold (Coaches visible solo para el coach principal)
                 composable(
                     route = Routes.COACH_MAIN,
                     arguments = listOf(
@@ -109,12 +126,17 @@ fun AppRoot(
                     val tabName = backStackEntry.arguments?.getString("tab")
                     val initialTab = CoachTab.entries.firstOrNull { it.name == tabName } ?: CoachTab.INICIO
                     val coachId = usuarioActual?.id ?: "user_coach_1"
-                    var selectedTab by remember(tabName) { mutableStateOf(initialTab) }
+                    val tabs = CoachTab.entries.filter {
+                        it != CoachTab.COACHES || usuarioActual?.esCoachPrincipal == true
+                    }
+                    var selectedTab by remember(tabName) {
+                        mutableStateOf(initialTab.takeIf { it in tabs } ?: CoachTab.INICIO)
+                    }
 
                     Scaffold(
                         bottomBar = {
                             NavigationBar {
-                                CoachTab.entries.forEach { tab ->
+                                tabs.forEach { tab ->
                                     NavigationBarItem(
                                         selected = selectedTab == tab,
                                         onClick = { selectedTab = tab },
@@ -141,6 +163,10 @@ fun AppRoot(
                                             navController.navigate(Routes.GESTION_COACHES_PRINCIPAL)
                                         }
                                     )
+                                }
+
+                                CoachTab.COACHES -> {
+                                    gestionCoachesContent { selectedTab = CoachTab.INICIO }
                                 }
 
                                 CoachTab.JUGADORES -> {
@@ -206,19 +232,7 @@ fun AppRoot(
 
                 // 5. Coach Principal (Jorge): Gestión y asignación de coaches
                 composable(Routes.GESTION_COACHES_PRINCIPAL) {
-                    GestionCoachesPrincipalScreen(
-                        repository = repository,
-                        onBack = { navController.popBackStack() },
-                        onNavigateToCrearHorarioCoach = { cId ->
-                            navController.navigate(Routes.formHorario(coachId = cId))
-                        },
-                        onNavigateToEditarHorarioCoach = { cId, hId ->
-                            navController.navigate(Routes.formHorario(coachId = cId, horarioId = hId))
-                        },
-                        onNavigateToDetalleJugador = { jId ->
-                            navController.navigate(Routes.detalleJugador(jId))
-                        }
-                    )
+                    gestionCoachesContent { navController.popBackStack() }
                 }
 
                 // 6. Admin Main Scaffold (Tabs: Inicio, Coaches, Jugadores, Catalogos, Ajustes)

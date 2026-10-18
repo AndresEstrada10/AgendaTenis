@@ -1,166 +1,110 @@
-# AgendaTenis - Especificacion funcional v1.0 (contexto para IA de desarrollo)
-# Reglas para la IA: NO agregar funcionalidades fuera de esta spec. Respetar prototipos (estructura visual/funcional).
-# [A] = supuesto pendiente de confirmar.
+# Estado verificado contra el codigo fuente el 2026-10-18.
+# Describe el prototipo existente; no es una lista de funcionalidades por implementar.
+app:
+  nombre: AgendaTenis
+  plataforma: Android nativo
+  lenguaje: Kotlin
+  interfaz: Jetpack Compose y Material 3
+  navegacion: Navigation Compose con NavHost y NavController
+  sdk: {minimo: 33, objetivo: 37, compilacion: 37}
+  proposito: Organizar jugadores, planes, horarios, canchas y registros de pagos.
+  almacenamiento: Singleton AgendaTenisRepository con StateFlow en memoria y datos de demostracion.
+  persistencia_entre_procesos: false
+  ui:
+    temas: [claro, oscuro]
+    colores: Verde primario, fondos neutros, amarillo para acciones destacadas y rojo para acciones destructivas.
+    componentes: [avatar con iniciales, buscadores, FAB, dias de semana, banner de pago, campana y dialogos de confirmacion]
 
-#app:
-#  nombre: AgendaTenis
-#  plataforma: Android nativo
-#  stack: [Kotlin, Android Studio]
-#  proposito: Organizar jugadores, horarios/canchas y fechas de pago de un coach independiente. Pagos NO se procesan en la app; solo se registran y generan recordatorios.
-#  ui:
-#    estilo: minimalista, limpio, intuitivo, accesible
-#    colores: verde primario, fondos neutros, amarillo solo para acciones destacadas, rojo solo para cerrar sesion/eliminar
-#    tema: [claro, oscuro]
-#    accesibilidad: contraste adecuado, texto legible, botones tactiles amplios
-#    componentes_prototipo: [FAB(+) en listas, tarjeta amarilla "Registrar pago", banner "Pago registrado exitosamente", campana con contador, dias L M X J V S D resaltados, avatar con iniciales, buscador en lista]
-#  terminologia: "Estudiantes" del prototipo => "Jugadores" [A]
-#
-#roles:
-#  ADMIN: administra todo el sistema; no recibe recordatorios
-#  COACH: gestiona su propia actividad; solo ve sus datos + catalogos compartidos (ciudades, canchas)
-#  registro_publico: crea siempre COACH; primer ADMIN interno, luego los crea otro ADMIN [A]
-#
-#permisos:  # C=crear R=ver U=editar D=eliminar
-#  Usuario_Coach:  {ADMIN: "C R U desactivar", COACH: "solo su perfil"}
-#  Ciudad:         {ADMIN: CRUD, COACH: R}
-#  Cancha:         {ADMIN: CRUD, COACH: R}
-#  Plan:           {ADMIN: "CRUD cualquiera", COACH: "CRUD propios"}
-#  Jugador:        {ADMIN: "CRUD cualquiera + reasignar coach", COACH: "CRUD propios"}
-#  Horario_Asign:  {ADMIN: "CRUD cualquiera", COACH: "CRUD propios"}
-#  Pago:           {ADMIN: "R U D todos", COACH: "CRUD de sus jugadores"}
-#  Configuracion:  {ADMIN: "tema, sesion, logout", COACH: "tema, recordar sesion, dias anticipacion, logout"}
-#
-#modulos: [Autenticacion, Inicio, Jugadores, Planes, Agenda_Horarios, Ciudades_Canchas, Pagos, Recordatorios, Configuracion, Admin_Coaches]
-#
-#entidades:
-#  Usuario: [id, nombre, correo(unico), contrasena, rol(ADMIN|COACH), estado(activo|inactivo)]
-#  Ciudad: [id, nombre]
-#  Cancha: [id, nombre, referencia?, ciudadId]
-#  Plan: [id, nombre, clasesPorSemana, valor, coachId]
-#  Jugador: [id, nombre, telefono, fechaInicio, planId, coachId, estado(activo|inactivo)]
-#  Horario: [id, coachId, canchaId, diaSemana, horaInicio, horaFin]
-#  Asignacion: [id, jugadorId, horarioId]
-#  Pago: [id, jugadorId, fecha, monto, observacion?]
-#  ConfigUsuario: [usuarioId, tema(claro|oscuro), recordarSesion, diasAnticipacion(def 3, rango 1-7)]
-#  nota: Recordatorios NO son entidad; se calculan desde Jugador+Pago+Config.
-#  clasificacion: {maestros: [Ciudad, Cancha, Plan, Jugador, Horario], transaccional: [Pago]}
-#
-#relaciones:
-#  - Ciudad 1-N Cancha
-#  - Coach 1-N Plan
-#  - Coach 1-N Jugador  # un jugador, un coach [A]
-#  - Coach 1-N Horario
-#  - Cancha 1-N Horario
-#  - Plan 1-N Jugador
-#  - Jugador N-N Horario via Asignacion  # permite clases grupales
-#  - Jugador 1-N Pago
-#  - Usuario 1-1 ConfigUsuario
-#
-#funciones_admin:
-#  A-01: login/logout
-#  A-02: CRUD(sin eliminar, desactivar) Coaches
-#  A-03: CRUD ciudades
-#  A-04: CRUD canchas (asociadas a ciudad)
-#  A-05: CRUD planes de cualquier coach
-#  A-06: CRUD jugadores de cualquiera + reasignar coach
-#  A-07: gestionar horarios y asignaciones de cualquier coach
-#  A-08: ver/editar/eliminar pagos de cualquier jugador
-#  A-09: resumen general (total coaches, jugadores activos, pagos proximos globales)
-#  A-10: tema claro/oscuro
-#
-#funciones_coach:
-#  RF-01: registro (nombre, correo, contrasena, confirmar contrasena)
-#  RF-02: login
-#  RF-03: configuracion (tema, recordar sesion, dias anticipacion, cerrar sesion)
-#  RF-04: crear plan (nombre, clases/semana, valor)
-#  RF-05: ver/editar/eliminar planes
-#  RF-06: registrar jugador (nombre, telefono, fechaInicio, plan)
-#  RF-07: asignar dias y horarios de clase (cancha+hora)
-#  RF-08: lista (con busqueda) y detalle de jugadores
-#  RF-09: editar/eliminar jugador con confirmacion
-#  RF-10: ver jugadores con clase hoy (hora, cancha)
-#  RF-11: registrar pago (fecha, monto)
-#  RF-12: historial de pagos por jugador
-#  RF-13: editar/eliminar pago
-#  RF-14: calcular proxima fecha de pago por jugador
-#  RF-15: mostrar pagos proximos segun dias de anticipacion
-#  RF-16: notificaciones: N dias antes + mismo dia del vencimiento
-#  RF-17: ver ciudades y canchas (solo lectura)
-#  RF-18: CRUD de sus horarios (cancha, dia, inicio, fin)
-#  RF-19: agenda semanal agrupada por dia
-#
-#navegacion:
-#  flujo_comun: Splash -> Login <-> Registro -> (segun rol)
-#  COACH:
-#    bottom_nav: [Inicio, Jugadores, Agenda, Planes, Ajustes]  # prototipo tenia 4; Agenda agregada [A]
-#    rutas:
-#      Inicio: [Pagos proximos -> DetalleJugador -> NuevoPago -> Inicio(banner confirmacion), Clases de hoy -> DetalleJugador]
-#      Jugadores: Lista -> Detalle -> [FormJugador, NuevoPago]
-#      Agenda: Semana por dia -> Horarios -> [FormHorario, Canchas(solo lectura)]
-#      Planes: Lista -> FormPlan(Guardar/Eliminar)
-#      Ajustes: Configuracion -> CerrarSesion -> Login
-#  ADMIN:
-#    bottom_nav: [Inicio, Coaches, Jugadores, Catalogos, Ajustes]
-#    rutas:
-#      Inicio: Resumen
-#      Coaches: Lista -> FormCoach
-#      Jugadores: ListaGlobal -> Detalle -> Form
-#      Catalogos: [Ciudades -> Canchas -> Forms, Planes]
-#      Ajustes: Configuracion -> CerrarSesion
-#
-#reglas_negocio:
-#  pagos_recordatorios:
-#    RN-01: app no procesa pagos; solo registra y avisa
-#    RN-02: ciclo mensual
-#    RN-03: fechaAncla = fecha del primer pago; sin pagos => fechaInicio del jugador [A]
-#    RN-04: proximaFecha = fechaAncla + (nroPagos) meses; pago atrasado NO desplaza calendario [A]
-#    RN-05: si el dia ancla no existe en el mes => ultimo dia del mes, conservando dia ancla para meses siguientes
-#    RN-06: cada pago cubre un ciclo mensual [A]
-#    RN-07: editar/eliminar pago recalcula proxima fecha; si se elimina el primero, ancla = siguiente pago mas antiguo
-#    RN-08: 2 recordatorios por ciclo: N dias antes (1-7, def 3) y mismo dia
-#    RN-09: fecha vencida sin pago => estado "Vencido" en Inicio hasta registrar pago
-#    RN-10: al registrar pago, cancelar recordatorios del ciclo pendiente y programar los del siguiente
-#    RN-11: jugadores inactivos no generan recordatorios
-#    RN-12: reprogramar recordatorios al abrir app y al reiniciar dispositivo
-#    RN-13: monto precargado con valor del plan, editable, > 0
-#  jugadores_planes_horarios:
-#    RN-14: un jugador = un plan y un coach
-#    RN-15: dias asignados != clasesPorSemana del plan => solo advertencia, permite guardar [A]
-#    RN-16: un coach no puede tener horarios solapados el mismo dia
-#    RN-17: una cancha admite horarios simultaneos (otros coaches o grupales); no se bloquea
-#    RN-18: no eliminar plan con jugadores asociados
-#    RN-19: no eliminar ciudad con canchas ni cancha con horarios
-#    RN-20: eliminar jugador con pagos => inactivo (conserva historial); sin pagos => borrado definitivo; siempre con confirmacion
-#    RN-21: coach desactivado no inicia sesion, datos se conservan
-#  cuentas:
-  #RN-22: correo unico; contrasena >= 6 caracteres y igual a confirmacion
-    #RN-23: recordar sesion mantiene autenticado; cerrar sesion invalida
-    # RN-24: validar campos obligatorios antes de guardar con mensajes claros
+roles:
+  ADMIN: Administracion global de coaches, jugadores, catalogos y planes.
+  COACH: Actividad propia y consulta de canchas; el coach principal tiene vistas de supervision adicionales.
+  registro_publico: Crea una cuenta COACH y abre su pantalla principal.
+  coach_principal:
+    criterio_existente: 'Usuario.esCoachPrincipal: rol COACH y (id user_coach_1 o nombre que contenga Jorge sin distinguir mayusculas).'
+    usuario_demostracion: Jorge Sanmartin
+    capacidades_existentes: [ver coaches, consultar canchas y horarios asignados, crear y editar horarios de otros coaches, eliminar horarios, consultar jugadores y reasignar coach]
+  limite: Los filtros y accesos de rol pertenecen al prototipo cliente; no existe autorizacion de servidor.
 
-  #vistas:  # informacion a mostrar por pantalla
-#Inicio_Coach: [pagos proximos y vencidos (nombre, "vence en X dias", fecha), clases de hoy (jugador, hora, cancha, ciudad), campana con contador]
-  #Inicio_Admin: [total coaches, jugadores activos, pagos proximos globales]
-  #Lista_Jugadores: [avatar iniciales, nombre, plan, dias resaltados L M X J V S D, hora, buscador, FAB +]
-  #Detalle_Jugador: [nombre, telefono, plan y valor, fechaInicio, proxima fecha de pago, dias/horarios/canchas, boton Registrar pago, historial (fecha, monto, estado)]
-  #Form_Jugador: [nombre, telefono, fechaInicio, plan, selector dias, horario/cancha]
-  #Form_Pago: [jugador, fecha, monto]
-  #Planes: [nombre, clases/semana, valor; form con Guardar y Eliminar]
-  #Agenda: [clases por dia: hora, cancha, ciudad, jugadores del horario]
-  #Ciudades_Canchas: [ciudad, canchas por ciudad, referencia]
-  #Coaches_Admin: [nombre, correo, estado, cantidad de jugadores]
-  #Configuracion: [tema, recordar sesion, dias anticipacion, cerrar sesion (rojo)]
+navegacion:
+  comun: Splash -> Login <-> Registro -> principal segun rol
+  coach:
+    bottom_nav: [Inicio, Jugadores, Agenda, Planes, Ajustes]
+    bottom_nav_principal: [Inicio, Coaches, Jugadores, Agenda, Planes, Ajustes]
+    coaches:
+      visibilidad: Solo cuando usuarioActual.esCoachPrincipal es verdadero.
+      icono: Icons.Default.SupervisorAccount
+      componente: NavigationBarItem dentro de la misma NavigationBar.
+      pantalla_reutilizada: GestionCoachesPrincipalScreen
+      contenido_compartido: gestionCoachesContent en AppRoot enlaza los mismos formularios y detalle de jugador.
+      volver_desde_pestana: Selecciona Inicio.
+      accesos_previos_conservados: [tarjeta de gestion en Inicio, acceso de gestion en Agenda]
+      ruta_previa: gestion_coaches_principal
+      volver_desde_ruta_previa: popBackStack
+    inicio: Pagos proximos o vencidos, clases de hoy, dialogo de recordatorios y acceso al detalle o registro de pago.
+    jugadores: Lista con busqueda, detalle, alta y edicion; supervision y reasignacion para coach principal.
+    agenda: Horarios agrupados por dia, formularios y consulta de canchas; filtro por coach para principal.
+    planes: Lista, creacion, edicion y eliminacion con validacion de jugadores activos asociados.
+    ajustes: Tema, recordar sesion, dias de anticipacion y cierre de sesion.
+  admin:
+    bottom_nav: [Inicio, Coaches, Jugadores, Catalogos, Ajustes]
+    inicio: Resumen global de coaches, jugadores y pagos proximos.
+    coaches: Lista, creacion y edicion de cuentas con estado activo o inactivo.
+    jugadores: Lista global y detalle; reutiliza los formularios existentes.
+    catalogos: Ciudades y canchas con formularios en dialogos, y planes globales.
+    ajustes: Tema y cierre de sesion.
+  subpantallas: [detalle_jugador, form_jugador, form_pago, form_plan, form_horario, canchas_coach, gestion_coaches_principal, admin_form_coach]
+  nota: Navigation.kt tambien conserva el modelo Screen; AppRoot utiliza las rutas de Routes y NavController.
 
-  #alcance:
-#incluido: [app Android Kotlin con roles ADMIN/COACH, gestion de coaches/jugadores/planes/ciudades/canchas/horarios/asignaciones, registro e historial de pagos, recordatorios locales (antelacion + mismo dia, mensuales), tema claro/oscuro]
-  #excluido: [cobros en linea/pasarelas, gestion de academias/multi-sede, estadisticas de ganancias/perdidas/horas, mensajes o correos a jugadores, chat, asistencia, torneos, facturacion, iOS]
-  #tecnico_pendiente: ADMIN gestiona datos de varios coaches => requiere almacenamiento compartido (servidor/Firebase), no solo local. Recordatorios son locales (notificaciones programadas; permiso POST_NOTIFICATIONS en Android 13+).
+entidades:
+  Usuario: [id, nombre, correo, contrasena, rol, estado]
+  Ciudad: [id, nombre]
+  Cancha: [id, nombre, referencia, ciudadId]
+  Plan: [id, nombre, clasesPorSemana, valor, coachId]
+  Jugador: [id, nombre, telefono, fechaInicio, planId, coachId, estado]
+  Horario: [id, coachId, canchaId, diaSemana, horaInicio, horaFin]
+  Asignacion: [id, jugadorId, horarioId]
+  Pago: [id, jugadorId, fecha, monto, observacion]
+  ConfigUsuario: [usuarioId, tema, recordarSesion, diasAnticipacion]
+  derivados: [PagoCalculado, RecordatorioItem, ClaseHoyItem, AdminResumen, ResumenCoachGestion]
 
-  #supuestos_por_confirmar:
-#- registro publico solo COACH; ADMIN internos
-  #- jugador pertenece a un solo coach
-  #- planes pertenecen a cada coach (no globales)
-  #- coach no crea ciudades ni canchas
-  #- fechaAncla = primer pago, o fechaInicio si no hay pagos
-  #- cada pago cubre un mes; pago atrasado no mueve calendario
-  #- dias vs plan: solo advertencia
-  #- pestana extra "Agenda" para coach
+comportamiento_existente:
+  autenticacion:
+    - Credenciales y usuarios de demostracion en memoria; no existe autenticacion remota.
+    - Correo unico, campos obligatorios y contrasena de al menos 6 caracteres con confirmacion en el registro.
+    - Un usuario inactivo no puede iniciar sesion.
+    - Cerrar sesion borra usuarioActual; recordarSesion se conserva solo en memoria.
+  pagos:
+    - Registra pagos; no procesa cobros ni usa pasarelas.
+    - Ancla en el primer pago cronologico o fechaInicio si no hay pagos.
+    - Proxima fecha igual al ancla mas la cantidad de pagos en meses, usando LocalDate.plusMonths.
+    - El monto debe ser positivo y se precarga desde el plan en el formulario.
+    - Permite consultar, editar y eliminar pagos y recalcula el estado.
+    - Recordatorios calculados y mostrados dentro de la app, incluidos pagos vencidos y proximos.
+  jugadores_y_horarios:
+    - Un jugador tiene un plan y un coach, y asignaciones a horarios.
+    - Diferencias entre dias asignados y clases del plan muestran advertencia en el formulario.
+    - Rechaza horarios solapados del mismo coach y dia; permite coincidencias de otros coaches en la cancha.
+    - No elimina planes con jugadores activos, ciudades con canchas ni canchas con horarios.
+    - Eliminar un jugador con pagos lo inactiva y elimina sus asignaciones; sin pagos lo borra.
+    - Reasignar un jugador cambia su coach y conserva las asignaciones existentes.
+  configuracion: Tema reactivo, recordarSesion y anticipacion limitada a 1 a 7 dias con valor inicial de 3.
+
+estado_academico:
+  etapa_actual: Prototipo de frontend y navegacion.
+  presentes: [Splash, registro e inicio de sesion de demostracion, configuracion visual, formularios CRUD en memoria, Compose, Material 3, Navigation Compose]
+  pendientes_en_codigo:
+    - Persistencia con Room y arquitectura MVVM con ViewModel.
+    - DataStore para preferencias y sesion persistente.
+    - Registro y autenticacion respaldados por base de datos.
+    - Notificaciones del sistema y reprogramacion persistente; el manifest no declara POST_NOTIFICATIONS ni receptor de reinicio.
+  nota: Los pendientes se documentan sin implementarlos en este ajuste puntual de navegacion.
+
+ajuste_2026_10_18:
+  alcance: Acceso principal Coaches para Jorge mediante la pantalla de gestion existente.
+  archivos_funcionales: [app/src/main/java/com/example/agendatenis/navigation/Navigation.kt, app/src/main/java/com/example/agendatenis/ui/AppRoot.kt]
+  preservado: Pantallas de gestion, repositorio, modelo, permisos, accesos previos y navegacion del administrador y de coaches no principales.
+  verificacion:
+    compilacion: ':app:assembleDebug completado correctamente.'
+    pruebas: ':app:testDebugUnitTest completado, 11 pruebas sin fallos.'
+    revision_codigo: Visibilidad condicionada, contenido compartido y callbacks existentes conservados.
+    prueba_interactiva: No ejecutada; no habia dispositivo conectado ni emulador operativo.

@@ -78,6 +78,7 @@ sealed interface Screen {
 
 enum class CoachTab(val label: String, val icon: ImageVector) {
     INICIO("Inicio", Icons.Default.Home),
+    COACHES("Coaches", Icons.Default.SupervisorAccount),
     JUGADORES("Jugadores", Icons.Default.Person),
     AGENDA("Agenda", Icons.Default.DateRange),
     PLANES("Planes", Icons.Default.List),
