@@ -31,9 +31,6 @@ class AgendaTenisRepository private constructor() {
     private val _canchas = MutableStateFlow<List<Cancha>>(emptyList())
     val canchas: StateFlow<List<Cancha>> = _canchas.asStateFlow()
 
-    private val _planes = MutableStateFlow<List<Plan>>(emptyList())
-    val planes: StateFlow<List<Plan>> = _planes.asStateFlow()
-
     private val _jugadores = MutableStateFlow<List<Jugador>>(emptyList())
     val jugadores: StateFlow<List<Jugador>> = _jugadores.asStateFlow()
 
@@ -105,26 +102,65 @@ class AgendaTenisRepository private constructor() {
         val cancha3 = Cancha(id = "can_3", nombre = "Cancha Central", referencia = "Portoviejo Tenis Club", ciudadId = ciudadPortoviejo.id)
         _canchas.value = listOf(cancha1, cancha2, cancha3)
 
-        val plan1 = Plan(id = "plan_1", nombre = "Plan Básico (2 días)", clasesPorSemana = 2, valor = 50.0, coachId = coach1.id)
-        val plan2 = Plan(id = "plan_2", nombre = "Plan Intermedio (3 días)", clasesPorSemana = 3, valor = 75.0, coachId = coach1.id)
-        val plan3 = Plan(id = "plan_3", nombre = "Plan Competencia (5 días)", clasesPorSemana = 5, valor = 120.0, coachId = coach1.id)
-        val planCoach2 = Plan(id = "plan_4", nombre = "Plan Junior Mariana (3 días)", clasesPorSemana = 3, valor = 80.0, coachId = coach2.id)
-        _planes.value = listOf(plan1, plan2, plan3, planCoach2)
-
-        // Jugadores para coach1
+        // Jugadores para coach1 con valores individuales y correo propio
         // Jugador 1: próximo a vencer (vence en 2 días)
         val fechaInicioJ1 = today.minusMonths(2).plusDays(2)
-        val j1 = Jugador(id = "jug_1", nombre = "Angel Veliz", telefono = "0987654321", fechaInicio = fechaInicioJ1, planId = plan2.id, coachId = coach1.id, estado = EstadoJugador.ACTIVO)
+        val j1 = Jugador(
+            id = "jug_1",
+            nombre = "Angel Veliz",
+            telefono = "0987654321",
+            correo = "angel.veliz@ejemplo.com",
+            fechaInicio = fechaInicioJ1,
+            valorMensual = 75.0,
+            coachId = coach1.id,
+            estado = EstadoJugador.ACTIVO
+        )
         // Jugador 2: vencido (venció hace 3 días)
         val fechaInicioJ2 = today.minusMonths(3).minusDays(3)
-        val j2 = Jugador(id = "jug_2", nombre = "Valeria Ramos", telefono = "0991234567", fechaInicio = fechaInicioJ2, planId = plan1.id, coachId = coach1.id, estado = EstadoJugador.ACTIVO)
+        val j2 = Jugador(
+            id = "jug_2",
+            nombre = "Valeria Ramos",
+            telefono = "0991234567",
+            correo = "valeria.ramos@ejemplo.com",
+            fechaInicio = fechaInicioJ2,
+            valorMensual = 50.0,
+            coachId = coach1.id,
+            estado = EstadoJugador.ACTIVO
+        )
         // Jugador 3: al día (vence en 20 días)
         val fechaInicioJ3 = today.minusMonths(1).plusDays(20)
-        val j3 = Jugador(id = "jug_3", nombre = "Mateo Delgado", telefono = "0978901234", fechaInicio = fechaInicioJ3, planId = plan3.id, coachId = coach1.id, estado = EstadoJugador.ACTIVO)
+        val j3 = Jugador(
+            id = "jug_3",
+            nombre = "Mateo Delgado",
+            telefono = "0978901234",
+            correo = "mateo.delgado@ejemplo.com",
+            fechaInicio = fechaInicioJ3,
+            valorMensual = 120.0,
+            coachId = coach1.id,
+            estado = EstadoJugador.ACTIVO
+        )
         // Jugador 4: nuevo sin pagos
-        val j4 = Jugador(id = "jug_4", nombre = "Camila Zambrano", telefono = "0965432109", fechaInicio = today.minusDays(5), planId = plan1.id, coachId = coach1.id, estado = EstadoJugador.ACTIVO)
+        val j4 = Jugador(
+            id = "jug_4",
+            nombre = "Camila Zambrano",
+            telefono = "0965432109",
+            correo = "camila.zambrano@ejemplo.com",
+            fechaInicio = today.minusDays(5),
+            valorMensual = 50.0,
+            coachId = coach1.id,
+            estado = EstadoJugador.ACTIVO
+        )
         // Jugador para coach2
-        val j5 = Jugador(id = "jug_5", nombre = "Lucas Intriago", telefono = "0954321098", fechaInicio = today.minusMonths(1), planId = planCoach2.id, coachId = coach2.id, estado = EstadoJugador.ACTIVO)
+        val j5 = Jugador(
+            id = "jug_5",
+            nombre = "Lucas Intriago",
+            telefono = "0954321098",
+            correo = "lucas.intriago@ejemplo.com",
+            fechaInicio = today.minusMonths(1),
+            valorMensual = 80.0,
+            coachId = coach2.id,
+            estado = EstadoJugador.ACTIVO
+        )
 
         _jugadores.value = listOf(j1, j2, j3, j4, j5)
 
@@ -253,7 +289,6 @@ class AgendaTenisRepository private constructor() {
      */
     fun calcularEstadoPago(jugadorId: String): PagoCalculado? {
         val jugador = _jugadores.value.firstOrNull { it.id == jugadorId } ?: return null
-        val plan = _planes.value.firstOrNull { it.id == jugador.planId }
         val pagosJugador = _pagos.value
             .filter { it.jugadorId == jugadorId }
             .sortedBy { it.fecha }
@@ -282,30 +317,31 @@ class AgendaTenisRepository private constructor() {
 
         return PagoCalculado(
             jugador = jugador,
-            plan = plan,
             fechaAncla = fechaAncla,
             proximaFecha = proximaFecha,
             diasRestantes = diasRestantes,
-            estado = estado
+            estado = estado,
+            valorMensual = jugador.valorMensual
         )
     }
 
     /**
-     * RN-08: 2 recordatorios por ciclo: N días antes (1-7, def 3) y mismo día
+     * RN-08: recordatorios por ciclo: N días antes (1-7, def 3) y mismo día
      * RN-09: fecha vencida sin pago => estado "Vencido" en Inicio hasta registrar pago
      * RN-11: jugadores inactivos no generan recordatorios
+     * Incluye el valor mensual individual de cada jugador correspondiente.
      */
     fun obtenerRecordatoriosParaCoach(coachId: String): List<RecordatorioItem> {
         val jugadoresCoach = _jugadores.value.filter { it.coachId == coachId && it.estado == EstadoJugador.ACTIVO }
         val config = _configs.value[coachId] ?: ConfigUsuario(coachId)
         val diasAnticipacion = config.diasAnticipacion
-        val hoy = LocalDate.now()
 
         val items = mutableListOf<RecordatorioItem>()
 
         for (jugador in jugadoresCoach) {
             val calc = calcularEstadoPago(jugador.id) ?: continue
             val dias = calc.diasRestantes
+            val valorFormateado = String.format("%.2f", jugador.valorMensual)
 
             if (dias < 0) {
                 // RN-09: Vencido
@@ -315,9 +351,10 @@ class AgendaTenisRepository private constructor() {
                         jugadorId = jugador.id,
                         jugadorNombre = jugador.nombre,
                         fechaVencimiento = calc.proximaFecha,
-                        mensaje = "Pago vencido hace ${-dias} día(s) (venció el ${calc.proximaFecha})",
+                        mensaje = "Pago vencido hace ${-dias} día(s) (venció el ${calc.proximaFecha}) • Cuota: $$valorFormateado",
                         esMismoDia = false,
-                        esVencido = true
+                        esVencido = true,
+                        valorMensual = jugador.valorMensual
                     )
                 )
             } else if (dias == 0L) {
@@ -328,9 +365,10 @@ class AgendaTenisRepository private constructor() {
                         jugadorId = jugador.id,
                         jugadorNombre = jugador.nombre,
                         fechaVencimiento = calc.proximaFecha,
-                        mensaje = "El pago vence hoy (${calc.proximaFecha})",
+                        mensaje = "El pago vence hoy (${calc.proximaFecha}) • Cuota: $$valorFormateado",
                         esMismoDia = true,
-                        esVencido = false
+                        esVencido = false,
+                        valorMensual = jugador.valorMensual
                     )
                 )
             } else if (dias in 1..diasAnticipacion.toLong()) {
@@ -341,9 +379,10 @@ class AgendaTenisRepository private constructor() {
                         jugadorId = jugador.id,
                         jugadorNombre = jugador.nombre,
                         fechaVencimiento = calc.proximaFecha,
-                        mensaje = "El pago vence en $dias día(s) (${calc.proximaFecha})",
+                        mensaje = "El pago vence en $dias día(s) (${calc.proximaFecha}) • Cuota: $$valorFormateado",
                         esMismoDia = false,
-                        esVencido = false
+                        esVencido = false,
+                        valorMensual = jugador.valorMensual
                     )
                 )
             }
@@ -441,57 +480,26 @@ class AgendaTenisRepository private constructor() {
         return _pagos.value.filter { it.jugadorId == jugadorId }.sortedByDescending { it.fecha }
     }
 
-    // --- GESTIÓN DE PLANES (RF-04, RF-05, RN-18) ---
-    fun guardarPlan(id: String?, nombre: String, clasesPorSemana: Int, valor: Double, coachId: String): Result<Plan> {
-        if (nombre.isBlank()) return Result.failure(Exception("El nombre del plan es obligatorio"))
-        if (clasesPorSemana <= 0) return Result.failure(Exception("Las clases por semana deben ser mayores a 0"))
-        if (valor <= 0) return Result.failure(Exception("El valor debe ser mayor a 0"))
-
-        val plan = if (id != null) {
-            val existente = _planes.value.firstOrNull { it.id == id }
-                ?: return Result.failure(Exception("Plan no encontrado"))
-            existente.copy(nombre = nombre.trim(), clasesPorSemana = clasesPorSemana, valor = valor)
-        } else {
-            Plan(
-                id = "plan_${System.currentTimeMillis()}",
-                nombre = nombre.trim(),
-                clasesPorSemana = clasesPorSemana,
-                valor = valor,
-                coachId = coachId
-            )
-        }
-
-        _planes.value = if (id != null) {
-            _planes.value.map { if (it.id == id) plan else it }
-        } else {
-            _planes.value + plan
-        }
-        return Result.success(plan)
-    }
-
-    // RN-18: no eliminar plan con jugadores asociados
-    fun eliminarPlan(planId: String): Result<Unit> {
-        val tieneJugadores = _jugadores.value.any { it.planId == planId && it.estado == EstadoJugador.ACTIVO }
-        if (tieneJugadores) {
-            return Result.failure(Exception("No se puede eliminar un plan que tiene jugadores activos asociados"))
-        }
-        _planes.value = _planes.value.filterNot { it.id == planId }
-        return Result.success(Unit)
-    }
-
-    // --- GESTIÓN DE JUGADORES (RF-06, RF-08, RF-09, RN-14, RN-15, RN-20) ---
+    // --- GESTIÓN DE JUGADORES CON VALOR INDIVIDUAL Y CORREO (RF-06, RF-08, RF-09, RN-14, RN-20) ---
+    // Tanto el usuario COACH como el ADMIN pueden establecer y modificar los jugadores y sus valores individuales
     fun guardarJugador(
         id: String?,
         nombre: String,
         telefono: String,
+        correo: String,
         fechaInicio: LocalDate,
-        planId: String,
+        valorMensual: Double,
         coachId: String,
         horariosIds: List<String>
     ): Result<Jugador> {
         if (nombre.isBlank()) return Result.failure(Exception("El nombre es obligatorio"))
         if (telefono.isBlank()) return Result.failure(Exception("El teléfono es obligatorio"))
-        if (planId.isBlank()) return Result.failure(Exception("Debe seleccionar un plan"))
+        if (correo.isBlank() || !correo.contains("@")) {
+            return Result.failure(Exception("El correo electrónico es obligatorio y debe tener un formato válido"))
+        }
+        if (valorMensual <= 0) {
+            return Result.failure(Exception("El valor mensual individual debe ser mayor a 0"))
+        }
 
         val jugadorId = id ?: "jug_${System.currentTimeMillis()}"
         val jugador = if (id != null) {
@@ -500,8 +508,9 @@ class AgendaTenisRepository private constructor() {
             existente.copy(
                 nombre = nombre.trim(),
                 telefono = telefono.trim(),
+                correo = correo.trim().lowercase(),
                 fechaInicio = fechaInicio,
-                planId = planId,
+                valorMensual = valorMensual,
                 coachId = coachId
             )
         } else {
@@ -509,8 +518,9 @@ class AgendaTenisRepository private constructor() {
                 id = jugadorId,
                 nombre = nombre.trim(),
                 telefono = telefono.trim(),
+                correo = correo.trim().lowercase(),
                 fechaInicio = fechaInicio,
-                planId = planId,
+                valorMensual = valorMensual,
                 coachId = coachId,
                 estado = EstadoJugador.ACTIVO
             )

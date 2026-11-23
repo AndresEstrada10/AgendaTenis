@@ -201,19 +201,6 @@ fun AppRoot(
                                     )
                                 }
 
-                                CoachTab.PLANES -> {
-                                    PlanesListScreen(
-                                        repository = repository,
-                                        coachId = coachId,
-                                        onNavigateToCrearPlan = {
-                                            navController.navigate(Routes.formPlan(coachId = coachId))
-                                        },
-                                        onNavigateToEditarPlan = { pId ->
-                                            navController.navigate(Routes.formPlan(coachId = coachId, planId = pId))
-                                        }
-                                    )
-                                }
-
                                 CoachTab.AJUSTES -> {
                                     ConfiguracionCoachScreen(
                                         repository = repository,
@@ -293,6 +280,9 @@ fun AppRoot(
                                         repository = repository,
                                         onNavigateToDetalleJugador = { jId ->
                                             navController.navigate(Routes.detalleJugador(jId))
+                                        },
+                                        onNavigateToCrearJugador = {
+                                            navController.navigate(Routes.formJugador())
                                         }
                                     )
                                 }
@@ -343,7 +333,7 @@ fun AppRoot(
                     )
                 }
 
-                // 8. Formulario de Jugador (Crear / Editar)
+                // 8. Formulario de Jugador (Crear / Editar) - Accesible tanto por COACH como por ADMIN
                 composable(
                     route = Routes.FORM_JUGADOR,
                     arguments = listOf(
@@ -386,29 +376,7 @@ fun AppRoot(
                     )
                 }
 
-                // 10. Formulario de Plan (Crear / Editar)
-                composable(
-                    route = Routes.FORM_PLAN,
-                    arguments = listOf(
-                        navArgument("coachId") { type = NavType.StringType },
-                        navArgument("planId") {
-                            type = NavType.StringType
-                            nullable = true
-                            defaultValue = null
-                        }
-                    )
-                ) { backStackEntry ->
-                    val coachId = backStackEntry.arguments?.getString("coachId") ?: (usuarioActual?.id ?: "user_coach_1")
-                    val planId = backStackEntry.arguments?.getString("planId")
-                    FormPlanScreen(
-                        repository = repository,
-                        coachId = coachId,
-                        planId = planId,
-                        onBack = { navController.popBackStack() }
-                    )
-                }
-
-                // 11. Formulario de Horario (Crear / Editar)
+                // 10. Formulario de Horario (Crear / Editar)
                 composable(
                     route = Routes.FORM_HORARIO,
                     arguments = listOf(
@@ -435,7 +403,7 @@ fun AppRoot(
                     )
                 }
 
-                // 12. Visualización de Canchas para Coach
+                // 11. Visualización de Canchas para Coach
                 composable(Routes.CANCHAS_COACH) {
                     CanchasCoachScreen(
                         repository = repository,
@@ -443,7 +411,7 @@ fun AppRoot(
                     )
                 }
 
-                // 13. Formulario de Coach en Admin (Crear / Editar)
+                // 12. Formulario de Coach en Admin (Crear / Editar)
                 composable(
                     route = Routes.ADMIN_FORM_COACH,
                     arguments = listOf(

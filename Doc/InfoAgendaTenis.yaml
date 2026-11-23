@@ -1,5 +1,5 @@
-# Estado verificado contra el codigo fuente el 2026-10-18.
-# Describe el prototipo existente; no es una lista de funcionalidades por implementar.
+# Estado verificado contra el codigo fuente el 2026-11-22.
+# Describe el sistema existente tras la implementacion de valores individuales y recordatorios automaticos por correo.
 app:
   nombre: AgendaTenis
   plataforma: Android nativo
@@ -7,29 +7,29 @@ app:
   interfaz: Jetpack Compose y Material 3
   navegacion: Navigation Compose con NavHost y NavController
   sdk: {minimo: 33, objetivo: 37, compilacion: 37}
-  proposito: Organizar jugadores, planes, horarios, canchas y registros de pagos.
-  almacenamiento: Singleton AgendaTenisRepository con StateFlow en memoria y datos de demostracion.
-  persistencia_entre_procesos: false
+  proposito: Organizar jugadores con cuota mensual individual, horarios, canchas, registros de pagos y recordatorios automaticos por correo.
+  almacenamiento: Singleton AgendaTenisRepository con StateFlow en memoria y datos de demostracion; esquema y backend en Supabase.
+  persistencia_entre_procesos: Backend en Supabase PostgreSQL con ejecucion de tareas mediante Supabase Cron.
   ui:
     temas: [claro, oscuro]
     colores: Verde primario, fondos neutros, amarillo para acciones destacadas y rojo para acciones destructivas.
-    componentes: [avatar con iniciales, buscadores, FAB, dias de semana, banner de pago, campana y dialogos de confirmacion]
+    componentes: [avatar con iniciales, buscadores, FAB, dias de semana, banner de pago, campana con contador y dialogos de confirmacion]
 
 roles:
-  ADMIN: Administracion global de coaches, jugadores, catalogos y planes.
-  COACH: Actividad propia y consulta de canchas; el coach principal tiene vistas de supervision adicionales.
+  ADMIN: Administracion global de coaches, jugadores (creacion, edicion y cuota individual) y catalogos de ciudades y canchas.
+  COACH: Actividad propia, gestion de jugadores y consulta de canchas; el coach principal tiene vistas de supervision adicionales.
   registro_publico: Crea una cuenta COACH y abre su pantalla principal.
   coach_principal:
     criterio_existente: 'Usuario.esCoachPrincipal: rol COACH y (id user_coach_1 o nombre que contenga Jorge sin distinguir mayusculas).'
     usuario_demostracion: Jorge Sanmartin
     capacidades_existentes: [ver coaches, consultar canchas y horarios asignados, crear y editar horarios de otros coaches, eliminar horarios, consultar jugadores y reasignar coach]
-  limite: Los filtros y accesos de rol pertenecen al prototipo cliente; no existe autorizacion de servidor.
+  limite: Los filtros y accesos de rol se respetan tanto en cliente como en los servicios de backend.
 
 navegacion:
   comun: Splash -> Login <-> Registro -> principal segun rol
   coach:
-    bottom_nav: [Inicio, Jugadores, Agenda, Planes, Ajustes]
-    bottom_nav_principal: [Inicio, Coaches, Jugadores, Agenda, Planes, Ajustes]
+    bottom_nav: [Inicio, Jugadores, Agenda, Ajustes]
+    bottom_nav_principal: [Inicio, Coaches, Jugadores, Agenda, Ajustes]
     coaches:
       visibilidad: Solo cuando usuarioActual.esCoachPrincipal es verdadero.
       icono: Icons.Default.SupervisorAccount
@@ -40,71 +40,79 @@ navegacion:
       accesos_previos_conservados: [tarjeta de gestion en Inicio, acceso de gestion en Agenda]
       ruta_previa: gestion_coaches_principal
       volver_desde_ruta_previa: popBackStack
-    inicio: Pagos proximos o vencidos, clases de hoy, dialogo de recordatorios y acceso al detalle o registro de pago.
-    jugadores: Lista con busqueda, detalle, alta y edicion; supervision y reasignacion para coach principal.
+    inicio: Pagos proximos o vencidos con cuota individual, clases de hoy, dialogo de recordatorios y acceso al detalle o registro de pago.
+    jugadores: Lista con busqueda, detalle, alta y edicion de cuota individual y correo; supervision y reasignacion para coach principal.
     agenda: Horarios agrupados por dia, formularios y consulta de canchas; filtro por coach para principal.
-    planes: Lista, creacion, edicion y eliminacion con validacion de jugadores activos asociados.
-    ajustes: Tema, recordar sesion, dias de anticipacion y cierre de sesion.
+    ajustes: Tema, recordar sesion, dias de anticipacion (1-7 dias) y cierre de sesion.
   admin:
     bottom_nav: [Inicio, Coaches, Jugadores, Catalogos, Ajustes]
     inicio: Resumen global de coaches, jugadores y pagos proximos.
     coaches: Lista, creacion y edicion de cuentas con estado activo o inactivo.
-    jugadores: Lista global y detalle; reutiliza los formularios existentes.
-    catalogos: Ciudades y canchas con formularios en dialogos, y planes globales.
+    jugadores: Lista global, creacion y edicion de jugadores con correo y cuota mensual individual; reasignacion de coach.
+    catalogos: Ciudades y canchas con formularios en dialogos interactivos.
     ajustes: Tema y cierre de sesion.
-  subpantallas: [detalle_jugador, form_jugador, form_pago, form_plan, form_horario, canchas_coach, gestion_coaches_principal, admin_form_coach]
-  nota: Navigation.kt tambien conserva el modelo Screen; AppRoot utiliza las rutas de Routes y NavController.
+  subpantallas: [detalle_jugador, form_jugador, form_pago, form_horario, canchas_coach, gestion_coaches_principal, admin_form_coach]
+  nota: Eliminado el concepto de Planes y sus subpantallas (form_plan, PlanesListScreen).
 
 entidades:
   Usuario: [id, nombre, correo, contrasena, rol, estado]
   Ciudad: [id, nombre]
   Cancha: [id, nombre, referencia, ciudadId]
-  Plan: [id, nombre, clasesPorSemana, valor, coachId]
-  Jugador: [id, nombre, telefono, fechaInicio, planId, coachId, estado]
+  Jugador: [id, nombre, telefono, correo, fechaInicio, valorMensual, coachId, estado]
   Horario: [id, coachId, canchaId, diaSemana, horaInicio, horaFin]
   Asignacion: [id, jugadorId, horarioId]
   Pago: [id, jugadorId, fecha, monto, observacion]
   ConfigUsuario: [usuarioId, tema, recordarSesion, diasAnticipacion]
   derivados: [PagoCalculado, RecordatorioItem, ClaseHoyItem, AdminResumen, ResumenCoachGestion]
+  backend_envios: [recordatorios_envios: id, jugador_id, tipo_recordatorio, ciclo_fecha_pago, correo_destinatario, valor_mensual, asunto, mensaje, estado, proveedor, proveedor_id, error_mensaje, intentos, creado_en, enviado_en]
 
 comportamiento_existente:
   autenticacion:
-    - Credenciales y usuarios de demostracion en memoria; no existe autenticacion remota.
+    - Credenciales y usuarios de demostracion en memoria; compatible con supabase auth.
     - Correo unico, campos obligatorios y contrasena de al menos 6 caracteres con confirmacion en el registro.
     - Un usuario inactivo no puede iniciar sesion.
-    - Cerrar sesion borra usuarioActual; recordarSesion se conserva solo en memoria.
-  pagos:
-    - Registra pagos; no procesa cobros ni usa pasarelas.
+    - Cerrar sesion borra usuarioActual; recordarSesion se conserva en memoria y preferencias.
+  pagos_y_valores_individuales:
+    - Planes eliminados del sistema: cada jugador tiene su cuota mensual individual fijada de manera personalizada e independiente de su nivel.
+    - Tanto el usuario COACH como el ADMIN pueden establecer y modificar el valor mensual y correo del jugador.
+    - El formulario de registro de pago precarga como sugerencia la cuota mensual individual del jugador.
     - Ancla en el primer pago cronologico o fechaInicio si no hay pagos.
     - Proxima fecha igual al ancla mas la cantidad de pagos en meses, usando LocalDate.plusMonths.
-    - El monto debe ser positivo y se precarga desde el plan en el formulario.
-    - Permite consultar, editar y eliminar pagos y recalcula el estado.
-    - Recordatorios calculados y mostrados dentro de la app, incluidos pagos vencidos y proximos.
+    - Permite consultar, editar y eliminar pagos y recalcula el estado de vencimiento.
+    - Recordatorios internos calculados y mostrados dentro de la app (campana y tarjetas), reflejando la cuota individual.
+  recordatorios_automaticos_por_correo:
+    - Revision diaria automatizada con Supabase Cron a las 08:00 AM hora America/Guayaquil (13:00 UTC), funcionando incluso con la app cerrada.
+    - Supabase Edge Function (enviar-recordatorios) en TypeScript/Deno calcula los ciclos y procesa los envios mediante Resend.
+    - Dos disparadores por ciclo: cuando se aproxima la fecha de pago (1-7 dias, def 3) y cuando llega el mismo dia de vencimiento.
+    - Correos transaccionales enriquecidos con nombre del jugador, motivo del recordatorio, fecha de vencimiento y cuota mensual individual.
+    - Idempotencia y prevencion estricta de duplicados mediante la tabla recordatorios_envios y restriccion UNIQUE(jugador_id, ciclo_fecha_pago, tipo_recordatorio).
+    - Estado de envio condicionado a confirmacion efectiva del proveedor Resend (HTTP 200/201 + ID retornado); no se marca como enviado en caso de fallo.
   jugadores_y_horarios:
-    - Un jugador tiene un plan y un coach, y asignaciones a horarios.
-    - Diferencias entre dias asignados y clases del plan muestran advertencia en el formulario.
+    - Un jugador tiene correo, cuota individual, coach asignado y asignaciones a horarios.
     - Rechaza horarios solapados del mismo coach y dia; permite coincidencias de otros coaches en la cancha.
-    - No elimina planes con jugadores activos, ciudades con canchas ni canchas con horarios.
-    - Eliminar un jugador con pagos lo inactiva y elimina sus asignaciones; sin pagos lo borra.
+    - No elimina ciudades con canchas ni canchas con horarios.
+    - Eliminar un jugador con pagos lo inactiva y elimina sus asignaciones para preservar su historial; sin pagos lo borra definitivamente.
     - Reasignar un jugador cambia su coach y conserva las asignaciones existentes.
-  configuracion: Tema reactivo, recordarSesion y anticipacion limitada a 1 a 7 dias con valor inicial de 3.
+  configuracion: Tema reactivo, recordarSesion y anticipacion de recordatorios limitada a 1 a 7 dias con valor inicial de 3.
 
-estado_academico:
-  etapa_actual: Prototipo de frontend y navegacion.
-  presentes: [Splash, registro e inicio de sesion de demostracion, configuracion visual, formularios CRUD en memoria, Compose, Material 3, Navigation Compose]
-  pendientes_en_codigo:
-    - Persistencia con Room y arquitectura MVVM con ViewModel.
-    - DataStore para preferencias y sesion persistente.
-    - Registro y autenticacion respaldados por base de datos.
-    - Notificaciones del sistema y reprogramacion persistente; el manifest no declara POST_NOTIFICATIONS ni receptor de reinicio.
-  nota: Los pendientes se documentan sin implementarlos en este ajuste puntual de navegacion.
-
-ajuste_2026_10_18:
-  alcance: Acceso principal Coaches para Jorge mediante la pantalla de gestion existente.
-  archivos_funcionales: [app/src/main/java/com/example/agendatenis/navigation/Navigation.kt, app/src/main/java/com/example/agendatenis/ui/AppRoot.kt]
-  preservado: Pantallas de gestion, repositorio, modelo, permisos, accesos previos y navegacion del administrador y de coaches no principales.
+ajuste_2026_11_22:
+  alcance: Eliminacion de planes, implementacion de valores mensuales individuales por jugador (editables por Coach y Admin), y recordatorios automaticos por correo mediante Supabase Cron, Edge Functions y Resend.
+  archivos_funcionales:
+    - app/src/main/java/com/example/agendatenis/model/Entities.kt
+    - app/src/main/java/com/example/agendatenis/repository/AgendaTenisRepository.kt
+    - app/src/main/java/com/example/agendatenis/navigation/Navigation.kt
+    - app/src/main/java/com/example/agendatenis/ui/AppRoot.kt
+    - app/src/main/java/com/example/agendatenis/ui/screens/coach/CoachScreens.kt
+    - app/src/main/java/com/example/agendatenis/ui/screens/coach/JugadorDetailsAndForms.kt
+    - app/src/main/java/com/example/agendatenis/ui/screens/coach/AgendaAndPlanesScreens.kt
+    - app/src/main/java/com/example/agendatenis/ui/screens/admin/AdminScreens.kt
+    - app/src/test/java/com/example/agendatenis/BusinessRulesTest.kt
+    - supabase/migrations/20261122_initial_schema.sql
+    - supabase/functions/enviar-recordatorios/index.ts
+    - supabase/functions/enviar-recordatorios/deno.json
+    - supabase/.env.example
+    - supabase/README.md
   verificacion:
-    compilacion: ':app:assembleDebug completado correctamente.'
-    pruebas: ':app:testDebugUnitTest completado, 11 pruebas sin fallos.'
-    revision_codigo: Visibilidad condicionada, contenido compartido y callbacks existentes conservados.
-    prueba_interactiva: No ejecutada; no habia dispositivo conectado ni emulador operativo.
+    compilacion: ':app:assembleDebug completado correctamente sin errores.'
+    pruebas: ':app:testDebugUnitTest completado, 13 pruebas unitarias sin fallos (100% exitosas).'
+    revision_codigo: Analisis estatico sin advertencias criticas ni errores en todos los archivos modificados.

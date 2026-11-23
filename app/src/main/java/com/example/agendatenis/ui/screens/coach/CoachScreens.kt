@@ -1,14 +1,15 @@
 package com.example.agendatenis.ui.screens.coach
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,8 +24,6 @@ import com.example.agendatenis.model.*
 import com.example.agendatenis.repository.AgendaTenisRepository
 import com.example.agendatenis.ui.components.*
 import com.example.agendatenis.ui.theme.*
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,8 +42,6 @@ fun CoachHomeScreen(
     val clasesHoy = remember(coachId, repository.horarios.collectAsState().value, repository.asignaciones.collectAsState().value) {
         repository.obtenerClasesDeHoyParaCoach(coachId)
     }
-    val jugadores by repository.jugadores.collectAsState()
-    val coachJugadores = jugadores.filter { it.coachId == coachId && it.estado == EstadoJugador.ACTIVO }
 
     var mostrarDialogRecordatorios by remember { mutableStateOf(false) }
 
@@ -150,7 +147,7 @@ fun CoachHomeScreen(
                                 )
                             }
                             Icon(
-                                imageVector = Icons.Default.ArrowForward,
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -323,7 +320,7 @@ fun CoachHomeScreen(
                                 )
                             }
                             Icon(
-                                imageVector = Icons.Default.ArrowForward,
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                 contentDescription = "Ver detalle",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -356,7 +353,6 @@ fun JugadoresListScreen(
 
     val jugadores by repository.jugadores.collectAsState()
     val usuarios by repository.usuarios.collectAsState()
-    val planes by repository.planes.collectAsState()
     val horarios by repository.horarios.collectAsState()
     val asignaciones by repository.asignaciones.collectAsState()
     val pagos by repository.pagos.collectAsState()
@@ -375,7 +371,7 @@ fun JugadoresListScreen(
             }
             .filter {
                 if (searchQuery.isBlank()) true
-                else it.nombre.contains(searchQuery, ignoreCase = true) || it.telefono.contains(searchQuery)
+                else it.nombre.contains(searchQuery, ignoreCase = true) || it.telefono.contains(searchQuery) || it.correo.contains(searchQuery, ignoreCase = true)
             }
             .sortedBy { it.nombre }
     }
@@ -464,7 +460,7 @@ fun JugadoresListScreen(
             BuscadorLista(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
-                placeholder = "Buscar por nombre o teléfono...",
+                placeholder = "Buscar por nombre, teléfono o correo...",
                 modifier = Modifier.padding(vertical = 8.dp)
             )
 
@@ -518,7 +514,6 @@ fun JugadoresListScreen(
                 ) {
                     items(jugadoresMostrados) { jugador ->
                         val coach = coachesMap[jugador.coachId]
-                        val plan = planes.firstOrNull { it.id == jugador.planId }
                         val jugadorAsignaciones = asignaciones.filter { it.jugadorId == jugador.id }
                         val jugadorHorarios = horarios.filter { h -> jugadorAsignaciones.any { it.horarioId == h.id } }
                         val diasActivos = jugadorHorarios.map { it.diaSemana }.toSet()
@@ -600,8 +595,8 @@ fun JugadoresListScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                text = if (isCoachPrincipal && coach != null) "Coach: ${coach.nombre} • ${plan?.nombre ?: "Sin plan"}"
-                                                else plan?.nombre ?: "Sin plan asignado",
+                                                text = if (isCoachPrincipal && coach != null) "Coach: ${coach.nombre} • $${String.format("%.2f", jugador.valorMensual)}/mes"
+                                                else "Cuota: $${String.format("%.2f", jugador.valorMensual)}/mes",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
@@ -645,6 +640,182 @@ fun JugadoresListScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ConfiguracionCoachScreen(
+    repository: AgendaTenisRepository,
+    coachId: String,
+    onLogout: () -> Unit
+) {
+    val config = remember(coachId, repository.configs.collectAsState().value) {
+        repository.obtenerConfigActual()
+    }
+    var tema by remember(config) { mutableStateOf(config.tema) }
+    var recordarSesion by remember(config) { mutableStateOf(config.recordarSesion) }
+    var diasAnticipacion by remember(config) { mutableStateOf(config.diasAnticipacion) }
+    var mostrarConfirmarLogout by remember { mutableStateOf(false) }
+
+    if (mostrarConfirmarLogout) {
+        ConfirmacionDialog(
+            titulo = "¿Cerrar Sesión?",
+            mensaje = "¿Deseas cerrar tu sesión actual de coach?",
+            textoConfirmar = "Cerrar Sesión",
+            esDestructivo = true,
+            onConfirmar = {
+                mostrarConfirmarLogout = false
+                repository.cerrarSesion()
+                onLogout()
+            },
+            onCancelar = { mostrarConfirmarLogout = false }
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Ajustes del Coach", fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Tema
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Tema de la Aplicación",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                tema = TemaApp.CLARO
+                                repository.actualizarConfig(TemaApp.CLARO, recordarSesion, diasAnticipacion)
+                            },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = if (tema == TemaApp.CLARO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (tema == TemaApp.CLARO) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Claro")
+                        }
+                        FilledTonalButton(
+                            onClick = {
+                                tema = TemaApp.OSCURO
+                                repository.actualizarConfig(TemaApp.OSCURO, recordarSesion, diasAnticipacion)
+                            },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = if (tema == TemaApp.OSCURO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (tema == TemaApp.OSCURO) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Oscuro")
+                        }
+                    }
+                }
+            }
+
+            // Días de anticipación recordatorios (1 a 7)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Anticipación de Recordatorios",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = "Notificar $diasAnticipacion día(s) antes del vencimiento (1 a 7 días).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Slider(
+                        value = diasAnticipacion.toFloat(),
+                        onValueChange = {
+                            diasAnticipacion = it.toInt()
+                            repository.actualizarConfig(tema, recordarSesion, diasAnticipacion)
+                        },
+                        valueRange = 1f..7f,
+                        steps = 5
+                    )
+                }
+            }
+
+            // Switch Recordar Sesión
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Recordar Sesión",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "Mantener sesión abierta en este dispositivo",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = recordarSesion,
+                        onCheckedChange = {
+                            recordarSesion = it
+                            repository.actualizarConfig(tema, it, diasAnticipacion)
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = { mostrarConfirmarLogout = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TennisRedDestructive,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(Icons.Default.ExitToApp, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Cerrar Sesión", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
     }

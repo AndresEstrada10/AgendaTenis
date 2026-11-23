@@ -69,20 +69,13 @@ data class Cancha(
     val ciudadId: String
 )
 
-data class Plan(
-    val id: String,
-    val nombre: String,
-    val clasesPorSemana: Int,
-    val valor: Double,
-    val coachId: String
-)
-
 data class Jugador(
     val id: String,
     val nombre: String,
     val telefono: String,
+    val correo: String,
     val fechaInicio: LocalDate,
-    val planId: String,
+    val valorMensual: Double,
     val coachId: String,
     val estado: EstadoJugador = EstadoJugador.ACTIVO
 )
@@ -120,11 +113,11 @@ data class ConfigUsuario(
 // Computed representations for UI
 data class PagoCalculado(
     val jugador: Jugador,
-    val plan: Plan?,
     val fechaAncla: LocalDate,
     val proximaFecha: LocalDate,
     val diasRestantes: Long,
-    val estado: EstadoPago
+    val estado: EstadoPago,
+    val valorMensual: Double = jugador.valorMensual
 )
 
 data class ClaseHoyItem(
@@ -144,7 +137,8 @@ data class RecordatorioItem(
     val fechaVencimiento: LocalDate,
     val mensaje: String,
     val esMismoDia: Boolean,
-    val esVencido: Boolean
+    val esVencido: Boolean,
+    val valorMensual: Double
 )
 
 data class ResumenCoachGestion(

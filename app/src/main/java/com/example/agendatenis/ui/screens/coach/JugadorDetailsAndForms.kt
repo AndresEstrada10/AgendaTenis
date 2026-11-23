@@ -1,6 +1,5 @@
 package com.example.agendatenis.ui.screens.coach
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,7 +24,6 @@ import com.example.agendatenis.repository.AgendaTenisRepository
 import com.example.agendatenis.ui.components.*
 import com.example.agendatenis.ui.theme.*
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,7 +36,6 @@ fun DetalleJugadorScreen(
     onNavigateToEditarPago: (jugadorId: String, pagoId: String) -> Unit
 ) {
     val jugadores by repository.jugadores.collectAsState()
-    val planes by repository.planes.collectAsState()
     val canchas by repository.canchas.collectAsState()
     val ciudades by repository.ciudades.collectAsState()
     val horarios by repository.horarios.collectAsState()
@@ -49,7 +46,6 @@ fun DetalleJugadorScreen(
     val jugador = jugadores.firstOrNull { it.id == jugadorId }
 
     var mostrarConfirmarEliminar by remember { mutableStateOf(false) }
-    var mensajeEliminacion by remember { mutableStateOf<String?>(null) }
     var pagoAEliminar by remember { mutableStateOf<Pago?>(null) }
 
     if (jugador == null) {
@@ -78,7 +74,6 @@ fun DetalleJugadorScreen(
     }
 
     val coachAsignado = usuarios.firstOrNull { it.id == jugador.coachId }
-    val plan = planes.firstOrNull { it.id == jugador.planId }
     val jugadorAsignaciones = asignaciones.filter { it.jugadorId == jugador.id }
     val jugadorHorarios = horarios.filter { h -> jugadorAsignaciones.any { it.horarioId == h.id } }
     val diasActivos = jugadorHorarios.map { it.diaSemana }.toSet()
@@ -194,6 +189,21 @@ fun DetalleJugadorScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Email,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = jugador.correo,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Coach a cargo: ${coachAsignado?.nombre ?: "No asignado"}",
@@ -211,7 +221,7 @@ fun DetalleJugadorScreen(
                 }
             }
 
-            // Datos del Plan y Próxima Fecha de Pago (RN-03, RN-04, RN-05)
+            // Datos de la Cuota Individual y Próxima Fecha de Pago (RN-03, RN-04, RN-05)
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -221,19 +231,22 @@ fun DetalleJugadorScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Plan y Estado de Pagos",
+                            text = "Cuota Individual y Estado de Pagos",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Plan actual:", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Valor mensual individual:", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
-                                text = plan?.let { "${it.nombre} ($${it.valor})" } ?: "No asignado",
-                                fontWeight = FontWeight.SemiBold
+                                text = "$${String.format("%.2f", jugador.valorMensual)}",
+                                fontWeight = FontWeight.Bold,
+                                color = TennisGreenLight,
+                                style = MaterialTheme.typography.titleMedium
                             )
                         }
 
@@ -252,7 +265,7 @@ fun DetalleJugadorScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("Fecha ancla:", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(text = estadoCalculado?.fechaAncla.toString(), fontWeight = FontWeight.Medium)
+                            Text(text = estadoCalculado?.fechaAncla?.toString() ?: "N/A", fontWeight = FontWeight.Medium)
                         }
 
                         Spacer(modifier = Modifier.height(6.dp))
@@ -307,25 +320,47 @@ fun DetalleJugadorScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Días y Horarios Asignados",
+                            text = "Días y Horarios Asignados (${jugadorHorarios.size})",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        DiasSemanaResaltados(diasActivos = diasActivos)
-
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            DiaSemana.entries.forEach { dia ->
+                                val isActivo = diasActivos.contains(dia)
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isActivo) TennisGreenLight else MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = dia.abrev,
+                                        modifier = Modifier.padding(vertical = 4.dp),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isActivo) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        }
 
                         if (jugadorHorarios.isEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Sin horarios de clase asignados.",
-                                style = MaterialTheme.typography.bodyMedium,
+                                text = "El jugador no tiene horarios asignados en la agenda.",
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
+                            Spacer(modifier = Modifier.height(10.dp))
                             jugadorHorarios.forEach { h ->
                                 val cancha = canchasMap[h.canchaId]
                                 val ciudad = cancha?.let { ciudadesMap[it.ciudadId] }
+                                val canchaNombre = cancha?.nombre ?: ""
+                                val ciudadNombre = ciudad?.nombre ?: ""
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -333,21 +368,15 @@ fun DetalleJugadorScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.DateRange,
+                                        imageVector = Icons.Default.AccessTime,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
+                                        tint = TennisGreenLight,
+                                        modifier = Modifier.size(16.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "${h.diaSemana.nombreCompleto}: ${h.horaInicio} - ${h.horaFin}",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "• ${cancha?.nombre ?: ""} (${ciudad?.nombre ?: ""})",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        text = "${h.diaSemana.nombreCompleto} (${h.horaInicio}-${h.horaFin}) • $canchaNombre ($ciudadNombre)",
+                                        style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
                             }
@@ -356,16 +385,7 @@ fun DetalleJugadorScreen(
                 }
             }
 
-            // Tarjeta amarilla "Registrar pago" (componente prototipo)
-            item {
-                TarjetaRegistrarPago(
-                    jugadorNombre = jugador.nombre,
-                    montoPlan = plan?.valor,
-                    onClick = { onNavigateToRegistrarPago(jugador.id) }
-                )
-            }
-
-            // Historial de Pagos (RF-12, RF-13)
+            // Historial de Pagos con botón de acción
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -373,24 +393,31 @@ fun DetalleJugadorScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Historial de Pagos",
+                        text = "Historial de Pagos (${historialPagos.size})",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
-                    Text(
-                        text = "${historialPagos.size} pago(s)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Button(
+                        onClick = { onNavigateToRegistrarPago(jugador.id) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TennisYellowAction,
+                            contentColor = TennisOnYellow
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Registrar Pago", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
                 }
             }
 
             if (historialPagos.isEmpty()) {
                 item {
                     Text(
-                        text = "No hay registros de pago para este jugador.",
+                        text = "No hay registros de pago. El estado se calcula a partir de la fecha de inicio.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
@@ -470,11 +497,11 @@ fun FormJugadorScreen(
 ) {
     val usuarioActual by repository.usuarioActual.collectAsState()
     val isCoachPrincipal = usuarioActual?.esCoachPrincipal == true
+    val isAdmin = usuarioActual?.rol == Rol.ADMIN
     val usuarios by repository.usuarios.collectAsState()
     val coaches = usuarios.filter { it.rol == Rol.COACH }
 
     val jugadores by repository.jugadores.collectAsState()
-    val planes by repository.planes.collectAsState()
     val horarios by repository.horarios.collectAsState()
     val asignaciones by repository.asignaciones.collectAsState()
     val canchas by repository.canchas.collectAsState()
@@ -483,11 +510,18 @@ fun FormJugadorScreen(
         jugadores.firstOrNull { it.id == jugadorId }
     }
 
-    var coachDesignadoId by remember { mutableStateOf(jugadorExistente?.coachId ?: coachId) }
+    var coachDesignadoId by remember {
+        mutableStateOf(
+            jugadorExistente?.coachId ?: if (isAdmin) (coaches.firstOrNull()?.id ?: coachId) else coachId
+        )
+    }
     var nombre by remember { mutableStateOf(jugadorExistente?.nombre ?: "") }
     var telefono by remember { mutableStateOf(jugadorExistente?.telefono ?: "") }
+    var correo by remember { mutableStateOf(jugadorExistente?.correo ?: "") }
     var fechaInicioStr by remember { mutableStateOf(jugadorExistente?.fechaInicio?.toString() ?: LocalDate.now().toString()) }
-    var planSeleccionadoId by remember { mutableStateOf(jugadorExistente?.planId ?: (planes.firstOrNull { it.coachId == coachDesignadoId }?.id ?: "")) }
+    var valorMensualStr by remember {
+        mutableStateOf(jugadorExistente?.valorMensual?.let { String.format("%.2f", it) } ?: "50.00")
+    }
 
     // Horarios asignados
     val initialHorarios = remember(jugadorExistente, asignaciones) {
@@ -501,13 +535,7 @@ fun FormJugadorScreen(
 
     var mensajeError by remember { mutableStateOf<String?>(null) }
 
-    val coachPlanes = planes.filter { it.coachId == coachDesignadoId }
     val coachHorarios = horarios.filter { it.coachId == coachDesignadoId }
-    val planActual = planes.firstOrNull { it.id == planSeleccionadoId }
-
-    // RN-15: advertencia si dias asignados != clasesPorSemana del plan
-    val clasesAsignadasCount = horariosSeleccionados.size
-    val requiereAdvertenciaRN15 = planActual != null && clasesAsignadasCount != planActual.clasesPorSemana
 
     Scaffold(
         topBar = {
@@ -543,8 +571,8 @@ fun FormJugadorScreen(
                 }
             }
 
-            // Designación de Coach por parte del Coach Principal (Jorge Sanmartin)
-            if (isCoachPrincipal) {
+            // Designación de Coach (visible para Admin o Coach Principal)
+            if (isAdmin || isCoachPrincipal) {
                 Text(
                     text = "Coach Designado *",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
@@ -555,10 +583,6 @@ fun FormJugadorScreen(
                             .fillMaxWidth()
                             .clickable {
                                 coachDesignadoId = c.id
-                                // reset plan if not matching
-                                if (!planes.any { it.id == planSeleccionadoId && it.coachId == c.id }) {
-                                    planSeleccionadoId = planes.firstOrNull { it.coachId == c.id }?.id ?: ""
-                                }
                             },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -566,14 +590,11 @@ fun FormJugadorScreen(
                             selected = coachDesignadoId == c.id,
                             onClick = {
                                 coachDesignadoId = c.id
-                                if (!planes.any { it.id == planSeleccionadoId && it.coachId == c.id }) {
-                                    planSeleccionadoId = planes.firstOrNull { it.coachId == c.id }?.id ?: ""
-                                }
                             }
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "${c.nombre} ${if (c.id == coachId) "(Tú - Coach Principal)" else ""}",
+                            text = "${c.nombre} ${if (c.id == coachId && !isAdmin) "(Tú - Coach Principal)" else ""}",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
@@ -599,6 +620,16 @@ fun FormJugadorScreen(
             )
 
             OutlinedTextField(
+                value = correo,
+                onValueChange = { correo = it },
+                label = { Text("Correo Electrónico (para recordatorios) *") },
+                placeholder = { Text("ejemplo@correo.com") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp)
+            )
+
+            OutlinedTextField(
                 value = fechaInicioStr,
                 onValueChange = { fechaInicioStr = it },
                 label = { Text("Fecha de Inicio (AAAA-MM-DD) *") },
@@ -607,38 +638,15 @@ fun FormJugadorScreen(
                 shape = RoundedCornerShape(10.dp)
             )
 
-            // Selector de Plan
-            Text(
-                text = "Seleccionar Plan *",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = valorMensualStr,
+                onValueChange = { valorMensualStr = it },
+                label = { Text("Valor Mensual Individual ($) *") },
+                placeholder = { Text("Ej. 60.00") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp)
             )
-
-            if (coachPlanes.isEmpty()) {
-                Text(
-                    text = "Aún no hay planes creados para este coach.",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            } else {
-                coachPlanes.forEach { p ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { planSeleccionadoId = p.id },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = planSeleccionadoId == p.id,
-                            onClick = { planSeleccionadoId = p.id }
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "${p.nombre} (${p.clasesPorSemana} clases/sem) - $${String.format("%.2f", p.valor)}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
 
             // Asignación de Horarios
             Text(
@@ -648,7 +656,7 @@ fun FormJugadorScreen(
 
             if (coachHorarios.isEmpty()) {
                 Text(
-                    text = "No hay horarios configurados para este coach. Puedes programarlos en la sección Agenda o Gestión de Coaches.",
+                    text = "No hay horarios configurados para este coach. Puedes programarlos en la sección Agenda.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -687,45 +695,25 @@ fun FormJugadorScreen(
                 }
             }
 
-            // RN-15: Advertencia si días asignados != clasesPorSemana del plan
-            if (requiereAdvertenciaRN15) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = TennisYellowActionContainer),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = TennisOnYellow
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Aviso (RN-15): El plan contempla ${planActual?.clasesPorSemana} clase(s)/sem, pero tienes seleccionados $clasesAsignadasCount horario(s). El sistema permite guardar, pero asegúrate de ajustar las clases.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TennisOnYellow
-                        )
-                    }
-                }
-            }
-
             Spacer(modifier = Modifier.height(10.dp))
 
             Button(
                 onClick = {
+                    val valorDouble = valorMensualStr.replace(',', '.').toDoubleOrNull()
+                    if (valorDouble == null || valorDouble <= 0) {
+                        mensajeError = "El valor mensual debe ser un número válido mayor a 0"
+                        return@Button
+                    }
                     try {
                         val fechaInicio = LocalDate.parse(fechaInicioStr.trim())
                         val res = repository.guardarJugador(
                             id = jugadorId,
                             nombre = nombre,
                             telefono = telefono,
+                            correo = correo,
                             fechaInicio = fechaInicio,
-                            planId = planSeleccionadoId,
-                            coachId = if (isCoachPrincipal) coachDesignadoId else coachId,
+                            valorMensual = valorDouble,
+                            coachId = if (isAdmin || isCoachPrincipal) coachDesignadoId else coachId,
                             horariosIds = horariosSeleccionados.toList()
                         )
                         res.onSuccess {
@@ -757,18 +745,16 @@ fun FormPagoScreen(
     onBack: () -> Unit
 ) {
     val jugadores by repository.jugadores.collectAsState()
-    val planes by repository.planes.collectAsState()
     val pagos by repository.pagos.collectAsState()
 
     val jugador = jugadores.firstOrNull { it.id == jugadorId }
-    val plan = planes.firstOrNull { it.id == jugador?.planId }
     val pagoExistente = remember(pagoId) {
         pagos.firstOrNull { it.id == pagoId }
     }
 
-    val valorSugerido = remember(plan, pagoExistente) {
+    val valorSugerido = remember(jugador, pagoExistente) {
         if (pagoExistente != null) pagoExistente.monto.toString()
-        else (plan?.valor ?: 50.0).toString()
+        else (jugador?.valorMensual ?: 50.0).toString()
     }
 
     var montoStr by remember { mutableStateOf(valorSugerido) }
@@ -809,8 +795,9 @@ fun FormPagoScreen(
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        text = "Plan: ${plan?.nombre ?: "Sin plan"} • Cuota fijada: $${plan?.valor ?: 0.0}",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = "Cuota mensual individual: $${String.format("%.2f", jugador?.valorMensual ?: 0.0)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
@@ -829,7 +816,7 @@ fun FormPagoScreen(
                 }
             }
 
-            // RN-13: Monto precargado con valor del plan, editable, > 0
+            // Monto precargado con el valor mensual individual del jugador, editable, > 0
             OutlinedTextField(
                 value = montoStr,
                 onValueChange = { montoStr = it },
@@ -860,7 +847,7 @@ fun FormPagoScreen(
 
             Button(
                 onClick = {
-                    val montoDouble = montoStr.toDoubleOrNull()
+                    val montoDouble = montoStr.replace(',', '.').toDoubleOrNull()
                     if (montoDouble == null || montoDouble <= 0) {
                         mensajeError = "El monto debe ser un número válido mayor a 0"
                         return@Button

@@ -121,7 +121,7 @@ fun AgendaCoachScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.White
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Programar nuevo horario")
+                Icon(Icons.Default.Add, contentDescription = "Nuevo Horario")
             }
         }
     ) { paddingValues ->
@@ -131,7 +131,7 @@ fun AgendaCoachScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
         ) {
-            // Filtro por Coach si es Coach Principal
+            // Filtro por coach en caso de Coach Principal (Jorge Sanmartin)
             if (isCoachPrincipal) {
                 Row(
                     modifier = Modifier
@@ -144,16 +144,11 @@ fun AgendaCoachScreen(
                         onClick = { coachFiltroId = null },
                         label = { Text("Todos") }
                     )
-                    FilterChip(
-                        selected = coachFiltroId == coachId,
-                        onClick = { coachFiltroId = coachId },
-                        label = { Text("Mis Horarios") }
-                    )
-                    coaches.filter { it.id != coachId }.forEach { c ->
+                    coaches.forEach { c ->
                         FilterChip(
                             selected = coachFiltroId == c.id,
                             onClick = { coachFiltroId = if (coachFiltroId == c.id) null else c.id },
-                            label = { Text(c.nombre.split(" ").first()) }
+                            label = { Text(if (c.id == coachId) "Mis Horarios" else c.nombre.split(" ").first()) }
                         )
                     }
                 }
@@ -161,127 +156,115 @@ fun AgendaCoachScreen(
 
             if (horariosFiltrados.isEmpty()) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No hay horarios configurados en esta vista.\nPulsa el botón (+) para programar una clase.",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "No hay horarios registrados. Presiona + para agregar.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 80.dp, top = 8.dp)
                 ) {
-                    // Agrupado por día de la semana (RF-19)
-                    DiaSemana.entries.forEach { dia ->
-                        val horariosDelDia = horariosFiltrados.filter { it.diaSemana == dia }
-                        if (horariosDelDia.isNotEmpty()) {
-                            item {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                    items(horariosFiltrados) { horario ->
+                        val cancha = canchasMap[horario.canchaId]
+                        val ciudad = cancha?.let { ciudadesMap[it.ciudadId] }
+                        val asignados = asignaciones.filter { it.horarioId == horario.id }
+                        val coachDueño = coachesMap[horario.coachId]
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onNavigateToEditarHorario(horario.id) },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = dia.nombreCompleto.uppercase(),
-                                            style = MaterialTheme.typography.labelLarge.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            color = TennisGreenLight.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text(
+                                                text = horario.diaSemana.nombreCompleto,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = TennisGreenLight
+                                                )
                                             )
-                                        )
+                                        }
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "(${horariosDelDia.size} bloque${if (horariosDelDia.size > 1) "s" else ""})",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                            text = "${horario.horaInicio} - ${horario.horaFin}",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { horarioAEliminar = horario },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Eliminar Horario",
+                                            tint = TennisRedDestructive,
+                                            modifier = Modifier.size(18.dp)
                                         )
                                     }
                                 }
-                            }
 
-                            items(horariosDelDia) { h ->
-                                val cancha = canchasMap[h.canchaId]
-                                val ciudad = cancha?.let { ciudadesMap[it.ciudadId] }
-                                val coachResponsable = coachesMap[h.coachId]
-                                val asignados = asignaciones.filter { it.horarioId == h.id }
-                                val nombresJugadores = asignados.mapNotNull { jugadoresMap[it.jugadorId]?.nombre }
+                                Spacer(modifier = Modifier.height(6.dp))
 
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                                ) {
-                                    Column(modifier = Modifier.padding(14.dp)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = Icons.Default.DateRange,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = "${h.horaInicio} - ${h.horaFin}",
-                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                                )
-                                            }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Place,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "${cancha?.nombre ?: "Cancha"} (${ciudad?.nombre ?: ""})",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
 
-                                            Row {
-                                                IconButton(
-                                                    onClick = { onNavigateToEditarHorario(h.id) },
-                                                    modifier = Modifier.size(32.dp)
-                                                ) {
-                                                    Icon(Icons.Default.Edit, contentDescription = "Editar", modifier = Modifier.size(18.dp))
-                                                }
-                                                IconButton(
-                                                    onClick = { horarioAEliminar = h },
-                                                    modifier = Modifier.size(32.dp)
-                                                ) {
-                                                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = TennisRedDestructive, modifier = Modifier.size(18.dp))
-                                                }
-                                            }
-                                        }
+                                if (isCoachPrincipal && coachDueño != null) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Coach: ${coachDueño.nombre}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
 
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        if (isCoachPrincipal && coachResponsable != null) {
-                                            Text(
-                                                text = "Coach: ${coachResponsable.nombre}",
-                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                                color = MaterialTheme.colorScheme.secondary
-                                            )
-                                        }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                Spacer(modifier = Modifier.height(6.dp))
 
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = "Cancha designada: ${cancha?.nombre ?: "Cancha desconocida"} • ${ciudad?.nombre ?: ""}",
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = if (nombresJugadores.isEmpty()) "Sin jugadores asignados aún"
-                                            else "Jugadores: ${nombresJugadores.joinToString(", ")}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (nombresJugadores.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
+                                // Jugadores inscritos en este horario
+                                Text(
+                                    text = if (asignados.isEmpty()) "Sin alumnos asignados" else "Jugadores (${asignados.size}):",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (asignados.isNotEmpty()) {
+                                    val nombresJugadores = asignados.mapNotNull { jugadoresMap[it.jugadorId]?.nombre }
+                                    Text(
+                                        text = nombresJugadores.joinToString(", "),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
                                 }
                             }
                         }
@@ -302,12 +285,12 @@ fun FormHorarioScreen(
 ) {
     val usuarioActual by repository.usuarioActual.collectAsState()
     val isCoachPrincipal = usuarioActual?.esCoachPrincipal == true
-    val usuarios by repository.usuarios.collectAsState()
-    val coaches = usuarios.filter { it.rol == Rol.COACH }
 
     val horarios by repository.horarios.collectAsState()
     val canchas by repository.canchas.collectAsState()
     val ciudades by repository.ciudades.collectAsState()
+    val usuarios by repository.usuarios.collectAsState()
+    val coaches = usuarios.filter { it.rol == Rol.COACH }
 
     val horarioExistente = remember(horarioId) {
         horarios.firstOrNull { it.id == horarioId }
@@ -341,7 +324,7 @@ fun FormHorarioScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             if (mensajeError != null) {
                 Card(
@@ -482,274 +465,13 @@ fun FormHorarioScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlanesListScreen(
-    repository: AgendaTenisRepository,
-    coachId: String,
-    onNavigateToCrearPlan: () -> Unit,
-    onNavigateToEditarPlan: (String) -> Unit
-) {
-    val planes by repository.planes.collectAsState()
-    val jugadores by repository.jugadores.collectAsState()
-
-    val coachPlanes = planes.filter { it.coachId == coachId }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Mis Planes", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToCrearPlan,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Crear nuevo plan")
-            }
-        }
-    ) { paddingValues ->
-        if (coachPlanes.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "No has creado planes de entrenamiento aún.\nPulsa el botón (+) para crear uno.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
-            ) {
-                items(coachPlanes) { plan ->
-                    val jugadoresConEstePlan = jugadores.count { it.planId == plan.id && it.estado == EstadoJugador.ACTIVO }
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigateToEditarPlan(plan.id) },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = plan.nombre,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "${plan.clasesPorSemana} clases por semana",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "$jugadoresConEstePlan jugador(es) activos inscritos",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "$${String.format("%.2f", plan.valor)}",
-                                    style = MaterialTheme.typography.titleLarge.copy(
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = TennisGreenLight
-                                    )
-                                )
-                                Text(
-                                    text = "Mensual",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FormPlanScreen(
-    repository: AgendaTenisRepository,
-    coachId: String,
-    planId: String?,
-    onBack: () -> Unit
-) {
-    val planes by repository.planes.collectAsState()
-    val planExistente = remember(planId) {
-        planes.firstOrNull { it.id == planId }
-    }
-
-    var nombre by remember { mutableStateOf(planExistente?.nombre ?: "") }
-    var clasesPorSemanaStr by remember { mutableStateOf(planExistente?.clasesPorSemana?.toString() ?: "3") }
-    var valorStr by remember { mutableStateOf(planExistente?.valor?.toString() ?: "50.0") }
-    var mensajeError by remember { mutableStateOf<String?>(null) }
-    var mostrarConfirmarEliminar by remember { mutableStateOf(false) }
-
-    if (mostrarConfirmarEliminar && planId != null) {
-        ConfirmacionDialog(
-            titulo = "¿Eliminar Plan?",
-            mensaje = "¿Estás seguro de eliminar el plan '$nombre'? Esta acción no se puede deshacer.",
-            textoConfirmar = "Eliminar",
-            esDestructivo = true,
-            onConfirmar = {
-                mostrarConfirmarEliminar = false
-                val res = repository.eliminarPlan(planId)
-                res.onSuccess {
-                    onBack()
-                }.onFailure { err ->
-                    mensajeError = err.message
-                }
-            },
-            onCancelar = { mostrarConfirmarEliminar = false }
-        )
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(if (planId == null) "Nuevo Plan" else "Editar Plan", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            if (mensajeError != null) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = mensajeError ?: "",
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
-
-            OutlinedTextField(
-                value = nombre,
-                onValueChange = { nombre = it },
-                label = { Text("Nombre del Plan *") },
-                placeholder = { Text("Ej. Plan Intermedio 3 Días") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp)
-            )
-
-            OutlinedTextField(
-                value = clasesPorSemanaStr,
-                onValueChange = { clasesPorSemanaStr = it },
-                label = { Text("Clases por Semana *") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp)
-            )
-
-            OutlinedTextField(
-                value = valorStr,
-                onValueChange = { valorStr = it },
-                label = { Text("Valor Mensual ($) *") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp)
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Button(
-                onClick = {
-                    val clases = clasesPorSemanaStr.toIntOrNull()
-                    val valor = valorStr.toDoubleOrNull()
-                    if (clases == null || clases <= 0) {
-                        mensajeError = "Las clases por semana deben ser un número mayor a 0"
-                        return@Button
-                    }
-                    if (valor == null || valor <= 0) {
-                        mensajeError = "El valor debe ser un monto mayor a 0"
-                        return@Button
-                    }
-
-                    val res = repository.guardarPlan(
-                        id = planId,
-                        nombre = nombre,
-                        clasesPorSemana = clases,
-                        valor = valor,
-                        coachId = coachId
-                    )
-                    res.onSuccess {
-                        onBack()
-                    }.onFailure { err ->
-                        mensajeError = err.message
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Text("Guardar Plan", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            }
-
-            // RN-18: Guardar/Eliminar en FormPlan
-            if (planId != null) {
-                OutlinedButton(
-                    onClick = { mostrarConfirmarEliminar = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TennisRedDestructive),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Eliminar Plan", fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 fun CanchasCoachScreen(
     repository: AgendaTenisRepository,
     onBack: () -> Unit
 ) {
-    val ciudades by repository.ciudades.collectAsState()
     val canchas by repository.canchas.collectAsState()
+    val ciudades by repository.ciudades.collectAsState()
+    val ciudadesMap = ciudades.associateBy { it.id }
 
     Scaffold(
         topBar = {
@@ -769,252 +491,50 @@ fun CanchasCoachScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(vertical = 12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp)
         ) {
-            item {
+            items(canchas) { cancha ->
+                val ciudad = ciudadesMap[cancha.ciudadId]
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Catálogo compartido (Solo Lectura). Las canchas y ciudades son administradas centralmente.",
-                            style = MaterialTheme.typography.bodySmall
+                        Icon(
+                            imageVector = Icons.Default.Place,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
                         )
-                    }
-                }
-            }
-
-            ciudades.forEach { ciudad ->
-                val canchasDeCiudad = canchas.filter { it.ciudadId == ciudad.id }
-
-                item {
-                    Text(
-                        text = "Ciudad: ${ciudad.nombre}",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                }
-
-                if (canchasDeCiudad.isEmpty()) {
-                    item {
-                        Text(
-                            text = "No hay canchas registradas en esta ciudad.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    items(canchasDeCiudad) { cancha ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = cancha.nombre,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "Ciudad: ${ciudad?.nombre ?: "Sin ciudad"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (!cancha.referencia.isNullOrBlank()) {
                                 Text(
-                                    text = cancha.nombre,
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                    text = "Ref: ${cancha.referencia}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                if (!cancha.referencia.isNullOrBlank()) {
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "Ref: ${cancha.referencia}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
                             }
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ConfiguracionCoachScreen(
-    repository: AgendaTenisRepository,
-    coachId: String,
-    onLogout: () -> Unit
-) {
-    val config = remember(coachId, repository.configs.collectAsState().value) {
-        repository.obtenerConfigActual()
-    }
-
-    var tema by remember(config) { mutableStateOf(config.tema) }
-    var recordarSesion by remember(config) { mutableStateOf(config.recordarSesion) }
-    var diasAnticipacion by remember(config) { mutableStateOf(config.diasAnticipacion) }
-    var mostrarConfirmarLogout by remember { mutableStateOf(false) }
-
-    if (mostrarConfirmarLogout) {
-        ConfirmacionDialog(
-            titulo = "¿Cerrar Sesión?",
-            mensaje = "¿Deseas cerrar tu sesión actual de AgendaTenis?",
-            textoConfirmar = "Cerrar Sesión",
-            esDestructivo = true,
-            onConfirmar = {
-                mostrarConfirmarLogout = false
-                repository.cerrarSesion()
-                onLogout()
-            },
-            onCancelar = { mostrarConfirmarLogout = false }
-        )
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Ajustes y Configuración", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Sección Tema
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Tema de la Aplicación",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        FilledTonalButton(
-                            onClick = {
-                                tema = TemaApp.CLARO
-                                repository.actualizarConfig(TemaApp.CLARO, recordarSesion, diasAnticipacion)
-                            },
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (tema == TemaApp.CLARO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (tema == TemaApp.CLARO) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Claro")
-                        }
-                        FilledTonalButton(
-                            onClick = {
-                                tema = TemaApp.OSCURO
-                                repository.actualizarConfig(TemaApp.OSCURO, recordarSesion, diasAnticipacion)
-                            },
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (tema == TemaApp.OSCURO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (tema == TemaApp.OSCURO) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Oscuro")
-                        }
-                    }
-                }
-            }
-
-            // Sección Recordar Sesión
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Recordar Sesión",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Text(
-                            text = "Mantener sesión iniciada al abrir la aplicación",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = recordarSesion,
-                        onCheckedChange = {
-                            recordarSesion = it
-                            repository.actualizarConfig(tema, it, diasAnticipacion)
-                        }
-                    )
-                }
-            }
-
-            // Sección Días de Anticipación (RF-15, RN-08: rango 1-7, def 3)
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Anticipación de Recordatorios",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                    Text(
-                        text = "Avisar $diasAnticipacion días antes del vencimiento (Rango: 1 a 7 días)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Slider(
-                        value = diasAnticipacion.toFloat(),
-                        onValueChange = {
-                            diasAnticipacion = it.toInt()
-                            repository.actualizarConfig(tema, recordarSesion, it.toInt())
-                        },
-                        valueRange = 1f..7f,
-                        steps = 5
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Botón rojo: Cerrar Sesión (especificación de color: rojo solo para cerrar sesión / eliminar)
-            Button(
-                onClick = { mostrarConfirmarLogout = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TennisRedDestructive,
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Icon(Icons.Default.ExitToApp, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Cerrar Sesión", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
     }

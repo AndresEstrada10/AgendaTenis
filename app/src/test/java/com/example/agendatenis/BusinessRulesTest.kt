@@ -27,6 +27,8 @@ class BusinessRulesTest {
 
         val jug1 = repository.jugadores.value.first { it.id == "jug_1" }
         assertEquals("Angel Veliz", jug1.nombre)
+        assertEquals("angel.veliz@ejemplo.com", jug1.correo)
+        assertEquals(75.0, jug1.valorMensual, 0.001)
     }
 
     @Test
@@ -61,6 +63,7 @@ class BusinessRulesTest {
         val calcJ1 = repository.calcularEstadoPago("jug_1")
         assertNotNull(calcJ1)
         assertEquals(calcJ1!!.fechaAncla.plusMonths(2), calcJ1.proximaFecha)
+        assertEquals(75.0, calcJ1.valorMensual, 0.001)
 
         // Para jugador 4 (nuevo, sin pagos), fechaAncla = fechaInicio y proximaFecha = fechaInicio + 0 meses
         val calcJ4 = repository.calcularEstadoPago("jug_4")
@@ -68,6 +71,7 @@ class BusinessRulesTest {
         val j4 = repository.jugadores.value.first { it.id == "jug_4" }
         assertEquals(j4.fechaInicio, calcJ4!!.fechaAncla)
         assertEquals(j4.fechaInicio, calcJ4.proximaFecha)
+        assertEquals(50.0, calcJ4.valorMensual, 0.001)
     }
 
     @Test
@@ -121,14 +125,6 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testRN18_noEliminarPlanConJugadores() {
-        // plan_1 tiene a jug_2 asignado
-        val res = repository.eliminarPlan("plan_1")
-        assertTrue(res.isFailure)
-        assertTrue(res.exceptionOrNull()?.message?.contains("jugadores") == true)
-    }
-
-    @Test
     fun testRN19_noEliminarCiudadConCanchas() {
         // ciu_1 tiene cancha 1 y 2
         val res = repository.eliminarCiudad("ciu_1")
@@ -144,13 +140,14 @@ class BusinessRulesTest {
         val j1 = repository.jugadores.value.first { it.id == "jug_1" }
         assertEquals(EstadoJugador.INACTIVO, j1.estado)
 
-        // Crear jugador sin pagos
+        // Crear jugador sin pagos con correo y cuota individual
         val jNuevo = repository.guardarJugador(
             id = null,
             nombre = "Jugador Sin Pagos",
             telefono = "0900000000",
+            correo = "sinpagos@ejemplo.com",
             fechaInicio = LocalDate.now(),
-            planId = "plan_1",
+            valorMensual = 60.0,
             coachId = "user_coach_1",
             horariosIds = emptyList()
         ).getOrThrow()
@@ -201,5 +198,90 @@ class BusinessRulesTest {
             confirmarContrasena = "654321"
         )
         assertTrue(resMismatch.isFailure)
+    }
+
+    @Test
+    fun testValoresIndividualesPorJugadorYModificacionPorCoachYAdmin() {
+        // Cada jugador tiene su propio valor mensual independiente
+        val j1 = repository.jugadores.value.first { it.id == "jug_1" }
+        val j2 = repository.jugadores.value.first { it.id == "jug_2" }
+        val j3 = repository.jugadores.value.first { it.id == "jug_3" }
+        assertEquals(75.0, j1.valorMensual, 0.001)
+        assertEquals(50.0, j2.valorMensual, 0.001)
+        assertEquals(120.0, j3.valorMensual, 0.001)
+
+        // Coach modifica el valor individual de jug_2
+        val updateCoach = repository.guardarJugador(
+            id = j2.id,
+            nombre = j2.nombre,
+            telefono = j2.telefono,
+            correo = j2.correo,
+            fechaInicio = j2.fechaInicio,
+            valorMensual = 65.0,
+            coachId = j2.coachId,
+            horariosIds = emptyList()
+        )
+        assertTrue(updateCoach.isSuccess)
+        val j2ModCoach = repository.jugadores.value.first { it.id == j2.id }
+        assertEquals(65.0, j2ModCoach.valorMensual, 0.001)
+
+        // Admin modifica el valor individual de jug_2 y lo reasigna
+        val updateAdmin = repository.guardarJugador(
+            id = j2.id,
+            nombre = j2.nombre,
+            telefono = j2.telefono,
+            correo = "valeria.nueva@ejemplo.com",
+            fechaInicio = j2.fechaInicio,
+            valorMensual = 95.0,
+            coachId = "user_coach_2",
+            horariosIds = emptyList()
+        )
+        assertTrue(updateAdmin.isSuccess)
+        val j2ModAdmin = repository.jugadores.value.first { it.id == j2.id }
+        assertEquals(95.0, j2ModAdmin.valorMensual, 0.001)
+        assertEquals("valeria.nueva@ejemplo.com", j2ModAdmin.correo)
+        assertEquals("user_coach_2", j2ModAdmin.coachId)
+    }
+
+    @Test
+    fun testValidacionCorreoYValorMensualJugador() {
+        // Correo sin formato válido
+        val resEmailInvalido = repository.guardarJugador(
+            id = null,
+            nombre = "Carlos Perez",
+            telefono = "0988776655",
+            correo = "carlos_sin_arroba",
+            fechaInicio = LocalDate.now(),
+            valorMensual = 50.0,
+            coachId = "user_coach_1",
+            horariosIds = emptyList()
+        )
+        assertTrue(resEmailInvalido.isFailure)
+        assertTrue(resEmailInvalido.exceptionOrNull()?.message?.contains("correo") == true)
+
+        // Valor mensual menor o igual a cero
+        val resValorInvalido = repository.guardarJugador(
+            id = null,
+            nombre = "Carlos Perez",
+            telefono = "0988776655",
+            correo = "carlos@ejemplo.com",
+            fechaInicio = LocalDate.now(),
+            valorMensual = 0.0,
+            coachId = "user_coach_1",
+            horariosIds = emptyList()
+        )
+        assertTrue(resValorInvalido.isFailure)
+        assertTrue(resValorInvalido.exceptionOrNull()?.message?.contains("mayor a 0") == true)
+    }
+
+    @Test
+    fun testRecordatoriosUtilizanValorIndividual() {
+        val recs = repository.obtenerRecordatoriosParaCoach("user_coach_1")
+        assertFalse(recs.isEmpty())
+        for (rec in recs) {
+            val jugador = repository.jugadores.value.first { it.id == rec.jugadorId }
+            assertEquals(jugador.valorMensual, rec.valorMensual, 0.001)
+            assertTrue(rec.mensaje.contains("Cuota: $") || rec.mensaje.contains(String.format("%.2f", jugador.valorMensual)))
+        }
     }
 }

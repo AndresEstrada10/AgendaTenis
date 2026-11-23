@@ -158,15 +158,15 @@ fun AdminHomeScreen(
                 ) {
                     Column {
                         Text(
-                            text = "Pagos Próximos / Vencidos",
+                            text = "Alertas de Pago Globales",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = TennisOnYellow
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Alerta global del sistema",
+                            text = "Pagos próximos o vencidos",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = TennisOnYellow.copy(alpha = 0.8f)
+                            color = TennisOnYellow.copy(alpha = 0.85f)
                         )
                     }
                     Text(
@@ -179,34 +179,40 @@ fun AdminHomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Accesos Rápidos de Administración",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            // Tarjeta Acceso a Catálogos
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToCatalogos() },
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                OutlinedButton(
-                    onClick = onNavigateToCoaches,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.AccountBox, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Coaches")
-                }
-                OutlinedButton(
-                    onClick = onNavigateToCatalogos,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Catálogos")
+                    Column {
+                        Text(
+                            text = "Catálogos del Sistema",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Ciudades y Canchas deportivas",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.Place,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(36.dp)
+                    )
                 }
             }
         }
@@ -221,9 +227,14 @@ fun AdminCoachesScreen(
     onNavigateToEditarCoach: (String) -> Unit
 ) {
     val usuarios by repository.usuarios.collectAsState()
-    val jugadores by repository.jugadores.collectAsState()
-
     val coaches = usuarios.filter { it.rol == Rol.COACH }
+
+    var searchQuery by remember { mutableStateOf("") }
+    val coachesFiltrados = remember(coaches, searchQuery) {
+        coaches.filter {
+            searchQuery.isBlank() || it.nombre.contains(searchQuery, ignoreCase = true) || it.correo.contains(searchQuery, ignoreCase = true)
+        }.sortedBy { it.nombre }
+    }
 
     Scaffold(
         topBar = {
@@ -238,87 +249,74 @@ fun AdminCoachesScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.White
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Registrar nuevo coach")
+                Icon(Icons.Default.Add, contentDescription = "Nuevo Coach")
             }
         }
     ) { paddingValues ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
+                .padding(horizontal = 16.dp)
         ) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                ) {
-                    Text(
-                        text = "Regla de Negocio (RN-21 & A-02): Los coaches no se eliminan para preservar el histórico de jugadores y pagos; se desactivan para bloquear su acceso.",
-                        modifier = Modifier.padding(12.dp),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
+            BuscadorLista(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                placeholder = "Buscar coach por nombre o correo...",
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
 
-            items(coaches) { coach ->
-                val cantJugadores = jugadores.count { it.coachId == coach.id && it.estado == EstadoJugador.ACTIVO }
-                val esActivo = coach.estado == EstadoUsuario.ACTIVO
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onNavigateToEditarCoach(coach.id) },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (esActivo) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Row(
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(bottom = 80.dp, top = 4.dp)
+            ) {
+                items(coachesFiltrados) { coach ->
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .clickable { onNavigateToEditarCoach(coach.id) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        AvatarConIniciales(nombre = coach.nombre, size = 48.dp)
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AvatarConIniciales(nombre = coach.nombre, size = 46.dp)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = coach.nombre,
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                                 )
-                                Surface(
-                                    color = if (esActivo) TennisGreenContainer else TennisRedContainer,
-                                    shape = RoundedCornerShape(6.dp)
-                                ) {
-                                    Text(
-                                        text = if (esActivo) "ACTIVO" else "INACTIVO",
-                                        color = if (esActivo) TennisOnGreenContainer else TennisRedDestructive,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
+                                Text(
+                                    text = coach.correo,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        color = if (coach.estado == EstadoUsuario.ACTIVO) TennisGreenLight.copy(alpha = 0.15f) else TennisRedContainer,
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(
+                                            text = if (coach.estado == EstadoUsuario.ACTIVO) "ACTIVO" else "DESACTIVADO",
+                                            color = if (coach.estado == EstadoUsuario.ACTIVO) TennisGreenLight else TennisRedDestructive,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    }
                                 }
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = coach.correo,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "$cantJugadores jugador(es) activo(s)",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            IconButton(onClick = { onNavigateToEditarCoach(coach.id) }) {
+                                Icon(Icons.Default.Edit, contentDescription = "Editar", tint = MaterialTheme.colorScheme.primary)
+                            }
                         }
                     }
                 }
@@ -341,14 +339,14 @@ fun AdminFormCoachScreen(
 
     var nombre by remember { mutableStateOf(coachExistente?.nombre ?: "") }
     var correo by remember { mutableStateOf(coachExistente?.correo ?: "") }
-    var contrasena by remember { mutableStateOf(if (coachExistente == null) "" else "") }
+    var contrasena by remember { mutableStateOf("") }
     var estado by remember { mutableStateOf(coachExistente?.estado ?: EstadoUsuario.ACTIVO) }
     var mensajeError by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (coachId == null) "Nuevo Coach" else "Editar / Desactivar Coach", fontWeight = FontWeight.Bold) },
+                title = { Text(if (coachId == null) "Nuevo Coach (A-02)" else "Editar Coach (A-02)", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
@@ -364,7 +362,7 @@ fun AdminFormCoachScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             if (mensajeError != null) {
                 Card(
@@ -469,11 +467,11 @@ fun AdminFormCoachScreen(
 @Composable
 fun AdminJugadoresScreen(
     repository: AgendaTenisRepository,
-    onNavigateToDetalleJugador: (String) -> Unit
+    onNavigateToDetalleJugador: (String) -> Unit,
+    onNavigateToCrearJugador: () -> Unit = {}
 ) {
     val jugadores by repository.jugadores.collectAsState()
     val usuarios by repository.usuarios.collectAsState()
-    val planes by repository.planes.collectAsState()
     val pagos by repository.pagos.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
@@ -486,7 +484,7 @@ fun AdminJugadoresScreen(
     val jugadoresFiltrados = remember(jugadores, searchQuery, coachFiltroId) {
         jugadores.filter { j ->
             val matchesCoach = coachFiltroId == null || j.coachId == coachFiltroId
-            val matchesQuery = searchQuery.isBlank() || j.nombre.contains(searchQuery, ignoreCase = true) || j.telefono.contains(searchQuery)
+            val matchesQuery = searchQuery.isBlank() || j.nombre.contains(searchQuery, ignoreCase = true) || j.telefono.contains(searchQuery) || j.correo.contains(searchQuery, ignoreCase = true)
             matchesCoach && matchesQuery
         }.sortedBy { it.nombre }
     }
@@ -543,6 +541,15 @@ fun AdminJugadoresScreen(
                 title = { Text("Jugadores Globales (A-06)", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onNavigateToCrearJugador,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = Color.White
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Registrar nuevo jugador (Admin)")
+            }
         }
     ) { paddingValues ->
         Column(
@@ -554,7 +561,7 @@ fun AdminJugadoresScreen(
             BuscadorLista(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
-                placeholder = "Buscar jugador...",
+                placeholder = "Buscar jugador por nombre, teléfono o correo...",
                 modifier = Modifier.padding(vertical = 8.dp)
             )
 
@@ -586,7 +593,6 @@ fun AdminJugadoresScreen(
             ) {
                 items(jugadoresFiltrados) { jugador ->
                     val coach = coachesMap[jugador.coachId]
-                    val plan = planes.firstOrNull { it.id == jugador.planId }
                     val calc = remember(jugador.id, pagos) {
                         repository.calcularEstadoPago(jugador.id)
                     }
@@ -613,9 +619,14 @@ fun AdminJugadoresScreen(
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                                 )
                                 Text(
-                                    text = "Coach: ${coach?.nombre ?: "Sin coach"} • ${plan?.nombre ?: ""}",
+                                    text = "Coach: ${coach?.nombre ?: "Sin coach"} • Cuota: $${String.format("%.2f", jugador.valorMensual)}/mes",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = jugador.correo,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 if (calc != null) {
                                     Text(
@@ -645,37 +656,20 @@ fun AdminJugadoresScreen(
 fun AdminCatalogosScreen(
     repository: AgendaTenisRepository
 ) {
-    var tabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Ciudades y Canchas", "Planes Globales")
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gestión de Catálogos (A-03, A-04, A-05)", fontWeight = FontWeight.Bold) },
+                title = { Text("Gestión de Catálogos (A-03, A-04)", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            TabRow(selectedTabIndex = tabIndex) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = tabIndex == index,
-                        onClick = { tabIndex = index },
-                        text = { Text(title, fontWeight = FontWeight.Bold) }
-                    )
-                }
-            }
-
-            if (tabIndex == 0) {
-                AdminCiudadesYCanchasTab(repository = repository)
-            } else {
-                AdminPlanesGlobalesTab(repository = repository)
-            }
+            AdminCiudadesYCanchasTab(repository = repository)
         }
     }
 }
@@ -863,18 +857,28 @@ fun AdminCiudadesYCanchasTab(
         item {
             Button(
                 onClick = { mostrarDialogNuevaCiudad = true },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = RoundedCornerShape(10.dp)
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Agregar Nueva Ciudad")
+                Text("Nueva Ciudad (A-03)")
             }
         }
 
-        ciudades.forEach { ciudad ->
-            val canchasDeCiudad = canchas.filter { it.ciudadId == ciudad.id }
-
+        if (ciudades.isEmpty()) {
             item {
+                Text(
+                    text = "No hay ciudades registradas. Presiona el botón para agregar una.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            items(ciudades) { ciudad ->
+                val canchasDeCiudad = canchas.filter { it.ciudadId == ciudad.id }
+
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -883,19 +887,19 @@ fun AdminCiudadesYCanchasTab(
                     Column(modifier = Modifier.padding(14.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
                                 text = "Ciudad: ${ciudad.nombre}",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             Row {
-                                IconButton(onClick = { ciudadParaEditar = ciudad }) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Editar Ciudad", modifier = Modifier.size(20.dp))
+                                IconButton(onClick = { ciudadParaEditar = ciudad }, modifier = Modifier.size(32.dp)) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Editar Ciudad", modifier = Modifier.size(18.dp))
                                 }
-                                IconButton(onClick = { ciudadParaEliminar = ciudad }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Eliminar Ciudad", tint = TennisRedDestructive, modifier = Modifier.size(20.dp))
+                                IconButton(onClick = { ciudadParaEliminar = ciudad }, modifier = Modifier.size(32.dp)) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Eliminar Ciudad", tint = TennisRedDestructive, modifier = Modifier.size(18.dp))
                                 }
                             }
                         }
@@ -961,60 +965,6 @@ fun AdminCiudadesYCanchasTab(
                             Text("Agregar Cancha a ${ciudad.nombre}")
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun AdminPlanesGlobalesTab(
-    repository: AgendaTenisRepository
-) {
-    val planes by repository.planes.collectAsState()
-    val usuarios by repository.usuarios.collectAsState()
-    val coachesMap = usuarios.filter { it.rol == Rol.COACH }.associateBy { it.id }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(bottom = 60.dp)
-    ) {
-        items(planes) { plan ->
-            val coach = coachesMap[plan.coachId]
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = plan.nombre,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Text(
-                            text = "Coach: ${coach?.nombre ?: "Desconocido"} • ${plan.clasesPorSemana} clases/semana",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(
-                        text = "$${String.format("%.2f", plan.valor)}",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = TennisGreenLight
-                        )
-                    )
                 }
             }
         }

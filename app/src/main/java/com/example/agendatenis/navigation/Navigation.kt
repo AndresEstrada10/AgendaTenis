@@ -28,10 +28,6 @@ object Routes {
     fun formPago(jugadorId: String, pagoId: String? = null) =
         if (pagoId != null) "form_pago/$jugadorId?pagoId=$pagoId" else "form_pago/$jugadorId"
 
-    const val FORM_PLAN = "form_plan/{coachId}?planId={planId}"
-    fun formPlan(coachId: String, planId: String? = null) =
-        if (planId != null) "form_plan/$coachId?planId=$planId" else "form_plan/$coachId"
-
     const val FORM_HORARIO = "form_horario?coachId={coachId}&horarioId={horarioId}"
     fun formHorario(coachId: String? = null, horarioId: String? = null): String {
         val params = mutableListOf<String>()
@@ -62,7 +58,6 @@ sealed interface Screen {
     data class DetalleJugador(val jugadorId: String, val backScreen: Screen) : Screen
     data class FormJugador(val jugadorId: String? = null, val backScreen: Screen) : Screen
     data class FormPago(val jugadorId: String, val pagoId: String? = null, val backScreen: Screen) : Screen
-    data class FormPlan(val planId: String? = null, val coachId: String, val backScreen: Screen) : Screen
     data class FormHorario(val horarioId: String? = null, val coachId: String? = null, val backScreen: Screen) : Screen
     data class CanchasCoachView(val backScreen: Screen) : Screen
 
@@ -81,7 +76,6 @@ enum class CoachTab(val label: String, val icon: ImageVector) {
     COACHES("Coaches", Icons.Default.SupervisorAccount),
     JUGADORES("Jugadores", Icons.Default.Person),
     AGENDA("Agenda", Icons.Default.DateRange),
-    PLANES("Planes", Icons.Default.List),
     AJUSTES("Ajustes", Icons.Default.Settings)
 }
 
