@@ -24,6 +24,7 @@ import com.example.agendatenis.ui.components.AvatarConIniciales
 import com.example.agendatenis.ui.components.BuscadorLista
 import com.example.agendatenis.ui.components.ConfirmacionDialog
 import com.example.agendatenis.ui.theme.*
+import com.example.agendatenis.ui.components.SelectorTema
 import com.example.agendatenis.ui.viewmodel.admin.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -955,7 +956,8 @@ fun AdminCatalogosScreen(
 @Composable
 fun AdminConfiguracionScreen(
     uiState: AdminConfiguracionUiState,
-    onCambiarTema: (TemaApp) -> Unit,
+    temaSeleccionado: TemaApp?,
+    onCambiarTema: (TemaApp?) -> Unit,
     onSetMostrarConfirmarLogout: (Boolean) -> Unit,
     onLogoutConfirmado: () -> Unit
 ) {
@@ -996,31 +998,10 @@ fun AdminConfiguracionScreen(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        FilledTonalButton(
-                            onClick = { onCambiarTema(TemaApp.CLARO) },
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (uiState.tema == TemaApp.CLARO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (uiState.tema == TemaApp.CLARO) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Claro")
-                        }
-                        FilledTonalButton(
-                            onClick = { onCambiarTema(TemaApp.OSCURO) },
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (uiState.tema == TemaApp.OSCURO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (uiState.tema == TemaApp.OSCURO) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Oscuro")
-                        }
-                    }
+                    SelectorTema(
+                        temaSeleccionado = temaSeleccionado,
+                        onCambiarTema = onCambiarTema
+                    )
                 }
             }
 

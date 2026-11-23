@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import com.example.agendatenis.model.*
 import com.example.agendatenis.ui.components.*
 import com.example.agendatenis.ui.theme.*
+import com.example.agendatenis.ui.components.SelectorTema
 import com.example.agendatenis.ui.viewmodel.coach.CoachHomeUiState
 import com.example.agendatenis.ui.viewmodel.coach.ConfiguracionCoachUiState
 import com.example.agendatenis.ui.viewmodel.coach.JugadoresUiState
@@ -619,13 +620,13 @@ fun JugadoresListScreen(
 @Composable
 fun ConfiguracionCoachScreen(
     uiState: ConfiguracionCoachUiState,
-    onCambiarTema: (TemaApp) -> Unit,
+    temaSeleccionado: TemaApp?,
+    onCambiarTema: (TemaApp?) -> Unit,
     onCambiarRecordarSesion: (Boolean) -> Unit,
     onCambiarDiasAnticipacion: (Int) -> Unit,
     onSetMostrarConfirmarLogout: (Boolean) -> Unit,
     onCerrarSesion: () -> Unit
 ) {
-    val tema = uiState.tema
     val recordarSesion = uiState.recordarSesion
     val diasAnticipacion = uiState.diasAnticipacion
 
@@ -668,31 +669,10 @@ fun ConfiguracionCoachScreen(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        FilledTonalButton(
-                            onClick = { onCambiarTema(TemaApp.CLARO) },
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (tema == TemaApp.CLARO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (tema == TemaApp.CLARO) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Claro")
-                        }
-                        FilledTonalButton(
-                            onClick = { onCambiarTema(TemaApp.OSCURO) },
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (tema == TemaApp.OSCURO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (tema == TemaApp.OSCURO) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Oscuro")
-                        }
-                    }
+                    SelectorTema(
+                        temaSeleccionado = temaSeleccionado,
+                        onCambiarTema = onCambiarTema
+                    )
                 }
             }
 

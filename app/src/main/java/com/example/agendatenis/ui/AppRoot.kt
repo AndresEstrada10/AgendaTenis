@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.example.agendatenis.data.repository.ThemeRepository
+import com.example.agendatenis.ui.viewmodel.ThemeViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -34,15 +37,21 @@ import com.example.agendatenis.ui.viewmodel.coach.*
 @Composable
 fun AppRoot(
     repository: IAgendaTenisRepository = DefaultAppContainer.getInstance().repository,
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    themeRepository: ThemeRepository = DefaultAppContainer.getInstance()
+        .getThemeRepository(LocalContext.current.applicationContext)
 ) {
-    val viewModelFactory = remember(repository) { ViewModelFactory(repository) }
-
+    val viewModelFactory = remember(repository, themeRepository) {
+        ViewModelFactory(repository, themeRepository)
+    }
+    // ViewModel del contenedor raíz: también permanece activo en Login y al cerrar sesión.
+    val themeViewModel: ThemeViewModel = viewModel(factory = viewModelFactory)
+    val themeUiState by themeViewModel.uiState.collectAsStateWithLifecycle()
     val usuarioActual by repository.usuarioActual.collectAsStateWithLifecycle()
-    val configs by repository.configs.collectAsStateWithLifecycle()
 
-    val configUsuario = usuarioActual?.let { configs[it.id] }
-    val isDark = when (configUsuario?.tema) {
+    // Esperar la primera lectura evita mostrar un tema distinto al guardado al iniciar.
+    if (!themeUiState.cargado) return
+    val isDark = when (themeUiState.tema) {
         TemaApp.OSCURO -> true
         TemaApp.CLARO -> false
         null -> isSystemInDarkTheme()
@@ -309,7 +318,8 @@ fun AppRoot(
 
                                     ConfiguracionCoachScreen(
                                         uiState = configCoachUiState,
-                                        onCambiarTema = configCoachViewModel::cambiarTema,
+                                        temaSeleccionado = themeUiState.tema,
+                                        onCambiarTema = themeViewModel::cambiarTema,
                                         onCambiarRecordarSesion = configCoachViewModel::cambiarRecordarSesion,
                                         onCambiarDiasAnticipacion = configCoachViewModel::cambiarDiasAnticipacion,
                                         onSetMostrarConfirmarLogout = configCoachViewModel::setMostrarConfirmarLogout,
@@ -435,7 +445,8 @@ fun AppRoot(
 
                                     AdminConfiguracionScreen(
                                         uiState = adminConfigUiState,
-                                        onCambiarTema = adminConfigViewModel::cambiarTema,
+                                        temaSeleccionado = themeUiState.tema,
+                                        onCambiarTema = themeViewModel::cambiarTema,
                                         onSetMostrarConfirmarLogout = adminConfigViewModel::setMostrarConfirmarLogout,
                                         onLogoutConfirmado = {
                                             adminConfigViewModel.cerrarSesion {

@@ -20,7 +20,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.agendatenis.ui.theme.TennisGreenPrimary
 import com.example.agendatenis.ui.theme.TennisYellowAction
 import com.example.agendatenis.ui.viewmodel.auth.LoginUiState
 import com.example.agendatenis.ui.viewmodel.auth.RegistroUiState
@@ -38,7 +37,7 @@ fun SplashScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(TennisGreenPrimary),
+            .background(MaterialTheme.colorScheme.primary),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -56,7 +55,7 @@ fun SplashScreen(
                 text = "AgendaTenis",
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onPrimary,
                     letterSpacing = 1.sp
                 )
             )
@@ -64,7 +63,7 @@ fun SplashScreen(
             Text(
                 text = "Organización de jugadores, horarios y cobros",
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    color = Color.White.copy(alpha = 0.85f)
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
                 ),
                 textAlign = TextAlign.Center
             )
