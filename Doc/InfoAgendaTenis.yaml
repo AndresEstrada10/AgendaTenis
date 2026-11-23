@@ -1,20 +1,20 @@
 # Estado verificado contra el codigo fuente el 2026-11-22.
-# Describe el sistema existente tras la implementacion de la Etapa 3: Arquitectura MVVM, valores individuales y recordatorios automaticos por correo.
+# Describe el sistema existente tras la implementacion de la Etapa 3: Arquitectura MVVM, sincronizacion global del tema, valores individuales y recordatorios automaticos por correo.
 app:
   nombre: AgendaTenis
   plataforma: Android nativo
   lenguaje: Kotlin
-  arquitectura: MVVM (Model-View-ViewModel) con MAD Skills, Coroutines, StateFlow y DI limpia
+  arquitectura: MVVM (Model-View-ViewModel) con MAD Skills, Coroutines, StateFlow, DataStore Preferences y DI limpia
   interfaz: Jetpack Compose y Material 3 con State Hoisting estricto
   navegacion: Navigation Compose con NavHost y NavController
   sdk: {minimo: 33, objetivo: 37, compilacion: 37}
   proposito: Organizar jugadores con cuota mensual individual, horarios, canchas, registros de pagos y recordatorios automaticos por correo.
-  almacenamiento: Single Source of Truth (SSOT) con InMemoryAgendaTenisDataSource y StateFlow reactivos; retardos asincronos simulados (delay) y operaciones en Dispatchers.IO; esquema y backend en Supabase.
+  almacenamiento: Single Source of Truth (SSOT) con InMemoryAgendaTenisDataSource y StateFlow reactivos; persistencia global de apariencia con DataStoreThemeRepository; retardos asincronos simulados (delay) y operaciones en Dispatchers.IO; esquema y backend en Supabase.
   persistencia_entre_procesos: Backend en Supabase PostgreSQL con ejecucion de tareas mediante Supabase Cron y Resend.
   ui:
-    temas: [claro, oscuro]
+    temas: [claro, oscuro, sistema]
     colores: Verde primario, fondos neutros, amarillo para acciones destacadas y rojo para acciones destructivas.
-    componentes: [avatar con iniciales, buscadores, FAB, dias de semana, banner de pago, campana con contador y dialogos de confirmacion]
+    componentes: [avatar con iniciales, buscadores, FAB, dias de semana, banner de pago, campana con contador, dialogos de confirmacion, selector de tema global]
     consumo_estado: collectAsStateWithLifecycle() en todas las pantallas.
 
 roles:
@@ -45,14 +45,14 @@ navegacion:
     inicio: Pagos proximos o vencidos con cuota individual, clases de hoy, dialogo de recordatorios y acceso al detalle o registro de pago.
     jugadores: Lista con busqueda, detalle, alta y edicion de cuota individual y correo; supervision y reasignacion para coach principal.
     agenda: Horarios agrupados por dia, formularios y consulta de canchas; filtro por coach para principal.
-    ajustes: Tema, recordar sesion, dias de anticipacion (1-7 dias) y cierre de sesion.
+    ajustes: Tema global persistente, recordar sesion, dias de anticipacion (1-7 dias) y cierre de sesion.
   admin:
     bottom_nav: [Inicio, Coaches, Jugadores, Catalogos, Ajustes]
     inicio: Resumen global de coaches, jugadores y pagos proximos.
     coaches: Lista, creacion y edicion de cuentas con estado activo o inactivo.
     jugadores: Lista global, creacion y edicion de jugadores con correo y cuota mensual individual; reasignacion de coach.
     catalogos: Ciudades y canchas con formularios en dialogos interactivos.
-    ajustes: Tema y cierre de sesion.
+    ajustes: Tema global persistente y cierre de sesion.
   subpantallas: [detalle_jugador, form_jugador, form_pago, form_horario, canchas_coach, gestion_coaches_principal, admin_form_coach]
   nota: Eliminado el concepto de Planes y sus subpantallas (form_plan, PlanesListScreen).
 
@@ -77,8 +77,10 @@ arquitectura_mvvm_etapa_3:
       repository:
         - IAgendaTenisRepository (interfaz que desacopla la UI de las fuentes de datos)
         - AgendaTenisRepositoryImpl (implementacion de logica de negocio y Dispatchers.IO)
+        - ThemeRepository (contrato para persistencia global de apariencia)
+        - DataStoreThemeRepository (persistencia reactiva del tema en DataStore Preferences)
     di:
-      - AppContainer / DefaultAppContainer (inyeccion manual estructurada de dependencias)
+      - AppContainer / DefaultAppContainer (inyeccion manual estructurada de dependencias con getThemeRepository)
       - ViewModelFactory (ViewModelProvider.Factory para instanciar todos los ViewModels desacoplados)
     ui:
       screens:
@@ -89,6 +91,9 @@ arquitectura_mvvm_etapa_3:
         - auth: AuthViewModel
         - coach: CoachHomeViewModel, JugadoresViewModel, AgendaCoachViewModel, ConfiguracionCoachViewModel, GestionCoachesPrincipalViewModel, DetalleJugadorViewModel, FormJugadorViewModel, FormPagoViewModel, FormHorarioViewModel, CanchasCoachViewModel
         - admin: AdminHomeViewModel, AdminCoachesViewModel, AdminJugadoresViewModel, AdminCatalogosViewModel, AdminConfiguracionViewModel, AdminFormCoachViewModel
+        - theme: ThemeViewModel (gestion del estado reactivo del tema global)
+      components:
+        - SelectorTema (selector unificado para Claro, Oscuro o Sistema)
       state_hoisting: Estricto. Ningun composable hijo recibe instancias de ViewModel; solo reciben UiState y lambdas () -> Unit o (T) -> Unit.
       ciclo_de_vida: Consumo reactivo seguro mediante collectAsStateWithLifecycle().
     legacy_support:
@@ -121,13 +126,13 @@ comportamiento_existente:
     - No elimina ciudades con canchas ni canchas con horarios.
     - Eliminar un jugador con pagos lo inactiva y elimina sus asignaciones para preservar su historial; sin pagos lo borra definitivamente.
     - Reasignar un jugador cambia su coach y conserva las asignaciones existentes.
-  configuracion: Tema reactivo, recordarSesion y anticipacion de recordatorios limitada a 1 a 7 dias con valor inicial de 3.
+  configuracion: Tema reactivo y global persistente con DataStore Preferences, recordarSesion y anticipacion de recordatorios limitada a 1 a 7 dias con valor inicial de 3.
 
 verificacion:
   compilacion: ':app:assembleDebug completado exitosamente.'
-  pruebas: ':app:testDebugUnitTest completado exitosamente con 17 pruebas (12 de reglas de negocio + 1 default + 4 de arquitectura MVVM y ViewModels) al 100% aprobadas.'
+  pruebas: ':app:testDebugUnitTest completado exitosamente con 19 pruebas (12 de reglas de negocio + 1 default + 4 de arquitectura MVVM y ViewModels + 2 de persistencia de tema) al 100% aprobadas.'
   cobertura_arquitectura:
     - Flujo UI (Compose) -> ViewModel -> Repository -> DataSource verificado y conectado.
-    - Single Source of Truth (SSOT) garantizado mediante StateFlow.
+    - Single Source of Truth (SSOT) garantizado mediante StateFlow y DataStore Preferences.
     - Dispatchers.IO en todas las operaciones asincronas de lectura/escritura con delays simulados de 40ms.
     - DI estructurada con AppContainer y ViewModelFactory sin acoplamiento.
