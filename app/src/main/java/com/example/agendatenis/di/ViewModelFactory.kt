@@ -1,5 +1,7 @@
 package com.example.agendatenis.di
 
+import com.example.agendatenis.data.repository.ThemeRepository
+import com.example.agendatenis.ui.viewmodel.ThemeViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.agendatenis.data.repository.IAgendaTenisRepository
@@ -12,12 +14,16 @@ import com.example.agendatenis.ui.viewmodel.coach.*
  * Garantiza que ningún ViewModel instancie directamente repositorios ni fuentes de datos.
  */
 class ViewModelFactory(
-    private val repository: IAgendaTenisRepository
+    private val repository: IAgendaTenisRepository,
+    private val themeRepository: ThemeRepository? = null
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return when {
+            modelClass.isAssignableFrom(ThemeViewModel::class.java) ->
+                ThemeViewModel(requireNotNull(themeRepository)) as T
+
             // Auth
             modelClass.isAssignableFrom(AuthViewModel::class.java) ->
                 AuthViewModel(repository) as T
