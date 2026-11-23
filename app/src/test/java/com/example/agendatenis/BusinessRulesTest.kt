@@ -2,6 +2,7 @@ package com.example.agendatenis
 
 import com.example.agendatenis.model.*
 import com.example.agendatenis.repository.AgendaTenisRepository
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -18,7 +19,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testNombresPrincipalesConfigurados() {
+    fun testNombresPrincipalesConfigurados(): Unit = runBlocking {
         val admin = repository.usuarios.value.first { it.rol == Rol.ADMIN }
         assertEquals("Andres Estrada", admin.nombre)
 
@@ -32,7 +33,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testCoachPrincipalPermisosYGestion() {
+    fun testCoachPrincipalPermisosYGestion(): Unit = runBlocking {
         val coachJorge = repository.usuarios.value.first { it.id == "user_coach_1" }
         assertTrue(coachJorge.esCoachPrincipal)
 
@@ -54,11 +55,12 @@ class BusinessRulesTest {
         assertEquals("user_coach_2", j1Actualizado.coachId)
 
         // Regresar a Jorge
-        repository.reasignarCoachAJugador("jug_1", "user_coach_1")
+        val resetRes = repository.reasignarCoachAJugador("jug_1", "user_coach_1")
+        assertTrue(resetRes.isSuccess)
     }
 
     @Test
-    fun testRN03_RN04_calculoFechaAnclaYProximaFecha() {
+    fun testRN03_RN04_calculoFechaAnclaYProximaFecha(): Unit = runBlocking {
         // Para jugador 1 (Angel Veliz, tiene 2 pagos), la proximaFecha debe ser fechaAncla + 2 meses
         val calcJ1 = repository.calcularEstadoPago("jug_1")
         assertNotNull(calcJ1)
@@ -75,7 +77,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testRN13_montoMayorACero() {
+    fun testRN13_montoMayorACero(): Unit = runBlocking {
         val resultInvalido = repository.registrarPago(
             jugadorId = "jug_1",
             fecha = LocalDate.now(),
@@ -94,7 +96,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testRN16_horariosSolapadosMismoDiaMismoCoach() {
+    fun testRN16_horariosSolapadosMismoDiaMismoCoach(): Unit = runBlocking {
         val coachId = "user_coach_1"
         val canchaId = "can_1"
         val dia = DiaSemana.DOMINGO
@@ -125,7 +127,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testRN19_noEliminarCiudadConCanchas() {
+    fun testRN19_noEliminarCiudadConCanchas(): Unit = runBlocking {
         // ciu_1 tiene cancha 1 y 2
         val res = repository.eliminarCiudad("ciu_1")
         assertTrue(res.isFailure)
@@ -133,7 +135,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testRN20_eliminarJugadorConPagosPasaAInactivo() {
+    fun testRN20_eliminarJugadorConPagosPasaAInactivo(): Unit = runBlocking {
         // jug_1 tiene pagos registrados
         val res = repository.eliminarJugador("jug_1")
         assertTrue(res.isSuccess)
@@ -158,7 +160,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testRN21_coachDesactivadoNoIniciaSesion() {
+    fun testRN21_coachDesactivadoNoIniciaSesion(): Unit = runBlocking {
         // Desactivar a coach2
         repository.guardarCoachAdmin(
             id = "user_coach_2",
@@ -174,7 +176,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testRN22_correoUnicoYContrasena() {
+    fun testRN22_correoUnicoYContrasena(): Unit = runBlocking {
         val resDuplicado = repository.registrarCoach(
             nombre = "Coach Duplicado",
             correo = "jorge@agendatenis.com",
@@ -201,7 +203,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testValoresIndividualesPorJugadorYModificacionPorCoachYAdmin() {
+    fun testValoresIndividualesPorJugadorYModificacionPorCoachYAdmin(): Unit = runBlocking {
         // Cada jugador tiene su propio valor mensual independiente
         val j1 = repository.jugadores.value.first { it.id == "jug_1" }
         val j2 = repository.jugadores.value.first { it.id == "jug_2" }
@@ -244,7 +246,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testValidacionCorreoYValorMensualJugador() {
+    fun testValidacionCorreoYValorMensualJugador(): Unit = runBlocking {
         // Correo sin formato válido
         val resEmailInvalido = repository.guardarJugador(
             id = null,
@@ -275,7 +277,7 @@ class BusinessRulesTest {
     }
 
     @Test
-    fun testRecordatoriosUtilizanValorIndividual() {
+    fun testRecordatoriosUtilizanValorIndividual(): Unit = runBlocking {
         val recs = repository.obtenerRecordatoriosParaCoach("user_coach_1")
         assertFalse(recs.isEmpty())
         for (rec in recs) {

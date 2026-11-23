@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,33 +21,27 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.agendatenis.model.*
-import com.example.agendatenis.repository.AgendaTenisRepository
 import com.example.agendatenis.ui.components.*
 import com.example.agendatenis.ui.theme.*
+import com.example.agendatenis.ui.viewmodel.coach.DetalleJugadorUiState
+import com.example.agendatenis.ui.viewmodel.coach.FormJugadorUiState
+import com.example.agendatenis.ui.viewmodel.coach.FormPagoUiState
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetalleJugadorScreen(
-    repository: AgendaTenisRepository,
-    jugadorId: String,
+    uiState: DetalleJugadorUiState,
     onBack: () -> Unit,
     onNavigateToEditarJugador: (String) -> Unit,
     onNavigateToRegistrarPago: (String) -> Unit,
-    onNavigateToEditarPago: (jugadorId: String, pagoId: String) -> Unit
+    onNavigateToEditarPago: (jugadorId: String, pagoId: String) -> Unit,
+    onSetMostrarConfirmarEliminar: (Boolean) -> Unit,
+    onConfirmarEliminarJugador: () -> Unit,
+    onSetPagoAEliminar: (Pago?) -> Unit,
+    onConfirmarEliminarPago: () -> Unit
 ) {
-    val jugadores by repository.jugadores.collectAsState()
-    val canchas by repository.canchas.collectAsState()
-    val ciudades by repository.ciudades.collectAsState()
-    val horarios by repository.horarios.collectAsState()
-    val asignaciones by repository.asignaciones.collectAsState()
-    val pagos by repository.pagos.collectAsState()
-    val usuarios by repository.usuarios.collectAsState()
-
-    val jugador = jugadores.firstOrNull { it.id == jugadorId }
-
-    var mostrarConfirmarEliminar by remember { mutableStateOf(false) }
-    var pagoAEliminar by remember { mutableStateOf<Pago?>(null) }
+    val jugador = uiState.jugador
 
     if (jugador == null) {
         Scaffold(
@@ -55,7 +50,7 @@ fun DetalleJugadorScreen(
                     title = { Text("Detalle de Jugador") },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                         }
                     }
                 )
@@ -73,22 +68,15 @@ fun DetalleJugadorScreen(
         return
     }
 
-    val coachAsignado = usuarios.firstOrNull { it.id == jugador.coachId }
-    val jugadorAsignaciones = asignaciones.filter { it.jugadorId == jugador.id }
-    val jugadorHorarios = horarios.filter { h -> jugadorAsignaciones.any { it.horarioId == h.id } }
-    val diasActivos = jugadorHorarios.map { it.diaSemana }.toSet()
-    val historialPagos = remember(pagos, jugadorId) {
-        repository.obtenerPagosPorJugador(jugadorId)
-    }
-    val estadoCalculado = remember(jugadorId, pagos) {
-        repository.calcularEstadoPago(jugadorId)
-    }
-
-    val canchasMap = canchas.associateBy { it.id }
-    val ciudadesMap = ciudades.associateBy { it.id }
+    val coachAsignado = uiState.coachAsignado
+    val jugadorHorarios = uiState.horariosAsignados
+    val diasActivos = remember(jugadorHorarios) { jugadorHorarios.map { it.diaSemana }.toSet() }
+    val historialPagos = uiState.pagos
+    val estadoCalculado = uiState.pagoCalculado
+    val canchasMap = uiState.canchasMap
 
     // Diálogo de confirmación para eliminar jugador (RN-20)
-    if (mostrarConfirmarEliminar) {
+    if (uiState.mostrarDialogEliminarJugador) {
         val tienePagos = historialPagos.isNotEmpty()
         ConfirmacionDialog(
             titulo = if (tienePagos) "¿Desactivar Jugador?" else "¿Eliminar Jugador?",
@@ -98,32 +86,21 @@ fun DetalleJugadorScreen(
                 "El jugador '${jugador.nombre}' no registra pagos. Se eliminará definitivamente de la base de datos.",
             textoConfirmar = if (tienePagos) "Desactivar" else "Eliminar definitivamente",
             esDestructivo = true,
-            onConfirmar = {
-                mostrarConfirmarEliminar = false
-                val res = repository.eliminarJugador(jugador.id)
-                res.onSuccess {
-                    onBack()
-                }
-            },
-            onCancelar = { mostrarConfirmarEliminar = false }
+            onConfirmar = onConfirmarEliminarJugador,
+            onCancelar = { onSetMostrarConfirmarEliminar(false) }
         )
     }
 
     // Diálogo para eliminar pago
-    if (pagoAEliminar != null) {
+    if (uiState.pagoParaEliminar != null) {
+        val pago = uiState.pagoParaEliminar
         ConfirmacionDialog(
             titulo = "¿Eliminar Registro de Pago?",
-            mensaje = "Se eliminará el pago de $${pagoAEliminar?.monto} registrado el ${pagoAEliminar?.fecha}. Esto recalculará automáticamente la próxima fecha de vencimiento.",
+            mensaje = "Se eliminará el pago de $${pago.monto} registrado el ${pago.fecha}. Esto recalculará automáticamente la próxima fecha de vencimiento.",
             textoConfirmar = "Eliminar",
             esDestructivo = true,
-            onConfirmar = {
-                val pId = pagoAEliminar?.id
-                pagoAEliminar = null
-                if (pId != null) {
-                    repository.eliminarPago(pId)
-                }
-            },
-            onCancelar = { pagoAEliminar = null }
+            onConfirmar = onConfirmarEliminarPago,
+            onCancelar = { onSetPagoAEliminar(null) }
         )
     }
 
@@ -133,7 +110,7 @@ fun DetalleJugadorScreen(
                 title = { Text(jugador.nombre, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 },
                 actions = {
@@ -151,77 +128,9 @@ fun DetalleJugadorScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 32.dp, top = 8.dp)
+            contentPadding = PaddingValues(top = 8.dp, bottom = 40.dp)
         ) {
-            // Perfil general
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AvatarConIniciales(nombre = jugador.nombre, size = 60.dp)
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = jugador.nombre,
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Phone,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = jugador.telefono,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Email,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = jugador.correo,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Coach a cargo: ${coachAsignado?.nombre ?: "No asignado"}",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = if (jugador.estado == EstadoJugador.ACTIVO) "Estado: Activo" else "Estado: Inactivo",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                color = if (jugador.estado == EstadoJugador.ACTIVO) TennisGreenLight else MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Datos de la Cuota Individual y Próxima Fecha de Pago (RN-03, RN-04, RN-05)
+            // Tarjeta de Perfil
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -230,121 +139,146 @@ fun DetalleJugadorScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Cuota Individual y Estado de Pagos",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Valor mensual individual:", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(
-                                text = "$${String.format("%.2f", jugador.valorMensual)}",
-                                fontWeight = FontWeight.Bold,
-                                color = TennisGreenLight,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Fecha de inicio:", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(text = jugador.fechaInicio.toString(), fontWeight = FontWeight.Medium)
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Fecha ancla:", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(text = estadoCalculado?.fechaAncla?.toString() ?: "N/A", fontWeight = FontWeight.Medium)
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Próximo pago:", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(
-                                text = estadoCalculado?.proximaFecha?.toString() ?: "N/A",
-                                fontWeight = FontWeight.Bold,
-                                color = when (estadoCalculado?.estado) {
-                                    EstadoPago.VENCIDO -> TennisRedDestructive
-                                    EstadoPago.PROXIMO -> TennisYellowAction
-                                    else -> TennisGreenLight
+                            AvatarConIniciales(nombre = jugador.nombre, size = 56.dp)
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = jugador.nombre,
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Text(
+                                    text = "Coach: ${coachAsignado?.nombre ?: "Sin asignar"}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Inicio: ${jugador.fechaInicio}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (jugador.estado == EstadoJugador.INACTIVO) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "INACTIVO",
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
                                 }
-                            )
+                            }
                         }
 
-                        if (estadoCalculado != null) {
-                            Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Teléfono
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Phone, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = jugador.telefono, style = MaterialTheme.typography.bodyMedium)
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Correo propio del jugador
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = jugador.correo, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
+
+            // Estado de Pago y Cuota Mensual Individual
+            if (estadoCalculado != null) {
+                item {
+                    val calc = estadoCalculado
+                    val badgeColor = when (calc.estado) {
+                        EstadoPago.VENCIDO -> TennisRedDestructive
+                        EstadoPago.PROXIMO -> TennisYellowAction
+                        EstadoPago.AL_DIA -> TennisGreenLight
+                    }
+                    val estadoTitulo = when (calc.estado) {
+                        EstadoPago.VENCIDO -> "PAGO VENCIDO"
+                        EstadoPago.PROXIMO -> "PAGO PRÓXIMO A VENCER"
+                        EstadoPago.AL_DIA -> "PAGO AL DÍA"
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = badgeColor.copy(alpha = 0.12f))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Estado de cobro:", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                val (textoEstado, colorEstado) = when (estadoCalculado.estado) {
-                                    EstadoPago.VENCIDO -> "Vencido (${-estadoCalculado.diasRestantes} días atrás)" to TennisRedDestructive
-                                    EstadoPago.PROXIMO -> "Vence pronto (${estadoCalculado.diasRestantes} días)" to TennisYellowAction
-                                    EstadoPago.AL_DIA -> "Al día (en ${estadoCalculado.diasRestantes} días)" to TennisGreenLight
-                                }
                                 Text(
-                                    text = textoEstado,
+                                    text = estadoTitulo,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = badgeColor,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = "$${String.format("%.2f", calc.valorMensual)} / mes",
                                     fontWeight = FontWeight.Bold,
-                                    color = colorEstado
+                                    color = badgeColor,
+                                    style = MaterialTheme.typography.titleMedium
                                 )
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Próxima Fecha de Vencimiento: ${calc.proximaFecha}",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                            )
+                            Text(
+                                text = "Fecha Ancla del Calendario: ${calc.fechaAncla}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = if (calc.diasRestantes < 0) "Venció hace ${-calc.diasRestantes} día(s)"
+                                else if (calc.diasRestantes == 0L) "Vence hoy"
+                                else "Faltan ${calc.diasRestantes} día(s)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = badgeColor,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
             }
 
-            // Horarios y Canchas asignados
+            // Horarios Asignados al Jugador
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Días y Horarios Asignados (${jugadorHorarios.size})",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            DiaSemana.entries.forEach { dia ->
-                                val isActivo = diasActivos.contains(dia)
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = if (isActivo) TennisGreenLight else MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        text = dia.abrev,
-                                        modifier = Modifier.padding(vertical = 4.dp),
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isActivo) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 12.sp
-                                    )
-                                }
-                            }
+                            Text(
+                                text = "Horarios y Días de Clase",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            DiasSemanaResaltados(diasActivos = diasActivos)
                         }
 
                         if (jugadorHorarios.isEmpty()) {
@@ -358,9 +292,7 @@ fun DetalleJugadorScreen(
                             Spacer(modifier = Modifier.height(10.dp))
                             jugadorHorarios.forEach { h ->
                                 val cancha = canchasMap[h.canchaId]
-                                val ciudad = cancha?.let { ciudadesMap[it.ciudadId] }
                                 val canchaNombre = cancha?.nombre ?: ""
-                                val ciudadNombre = ciudad?.nombre ?: ""
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -375,7 +307,7 @@ fun DetalleJugadorScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "${h.diaSemana.nombreCompleto} (${h.horaInicio}-${h.horaFin}) • $canchaNombre ($ciudadNombre)",
+                                        text = "${h.diaSemana.nombreCompleto} (${h.horaInicio}-${h.horaFin}) • $canchaNombre",
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
@@ -456,7 +388,7 @@ fun DetalleJugadorScreen(
                             IconButton(onClick = { onNavigateToEditarPago(jugador.id, pago.id) }) {
                                 Icon(Icons.Default.Edit, contentDescription = "Editar Pago", tint = MaterialTheme.colorScheme.primary)
                             }
-                            IconButton(onClick = { pagoAEliminar = pago }) {
+                            IconButton(onClick = { onSetPagoAEliminar(pago) }) {
                                 Icon(Icons.Default.Delete, contentDescription = "Eliminar Pago", tint = TennisRedDestructive)
                             }
                         }
@@ -468,7 +400,7 @@ fun DetalleJugadorScreen(
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedButton(
-                    onClick = { mostrarConfirmarEliminar = true },
+                    onClick = { onSetMostrarConfirmarEliminar(true) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = TennisRedDestructive
@@ -490,60 +422,28 @@ fun DetalleJugadorScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FormJugadorScreen(
-    repository: AgendaTenisRepository,
-    coachId: String,
-    jugadorId: String?,
+    uiState: FormJugadorUiState,
+    isCoachPrincipal: Boolean,
+    isAdmin: Boolean,
+    onNombreChange: (String) -> Unit,
+    onTelefonoChange: (String) -> Unit,
+    onCorreoChange: (String) -> Unit,
+    onFechaInicioChange: (LocalDate) -> Unit,
+    onValorMensualChange: (String) -> Unit,
+    onCoachIdChange: (String) -> Unit,
+    onToggleHorario: (String) -> Unit,
+    onGuardarClick: () -> Unit,
     onBack: () -> Unit
 ) {
-    val usuarioActual by repository.usuarioActual.collectAsState()
-    val isCoachPrincipal = usuarioActual?.esCoachPrincipal == true
-    val isAdmin = usuarioActual?.rol == Rol.ADMIN
-    val usuarios by repository.usuarios.collectAsState()
-    val coaches = usuarios.filter { it.rol == Rol.COACH }
-
-    val jugadores by repository.jugadores.collectAsState()
-    val horarios by repository.horarios.collectAsState()
-    val asignaciones by repository.asignaciones.collectAsState()
-    val canchas by repository.canchas.collectAsState()
-
-    val jugadorExistente = remember(jugadorId) {
-        jugadores.firstOrNull { it.id == jugadorId }
-    }
-
-    var coachDesignadoId by remember {
-        mutableStateOf(
-            jugadorExistente?.coachId ?: if (isAdmin) (coaches.firstOrNull()?.id ?: coachId) else coachId
-        )
-    }
-    var nombre by remember { mutableStateOf(jugadorExistente?.nombre ?: "") }
-    var telefono by remember { mutableStateOf(jugadorExistente?.telefono ?: "") }
-    var correo by remember { mutableStateOf(jugadorExistente?.correo ?: "") }
-    var fechaInicioStr by remember { mutableStateOf(jugadorExistente?.fechaInicio?.toString() ?: LocalDate.now().toString()) }
-    var valorMensualStr by remember {
-        mutableStateOf(jugadorExistente?.valorMensual?.let { String.format("%.2f", it) } ?: "50.00")
-    }
-
-    // Horarios asignados
-    val initialHorarios = remember(jugadorExistente, asignaciones) {
-        if (jugadorExistente != null) {
-            asignaciones.filter { it.jugadorId == jugadorExistente.id }.map { it.horarioId }.toSet()
-        } else {
-            emptySet()
-        }
-    }
-    var horariosSeleccionados by remember { mutableStateOf(initialHorarios) }
-
-    var mensajeError by remember { mutableStateOf<String?>(null) }
-
-    val coachHorarios = horarios.filter { it.coachId == coachDesignadoId }
+    var fechaInicioStr by remember(uiState.fechaInicio) { mutableStateOf(uiState.fechaInicio.toString()) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (jugadorId == null) "Nuevo Jugador" else "Editar Jugador", fontWeight = FontWeight.Bold) },
+                title = { Text(if (!uiState.esEdicion) "Nuevo Jugador" else "Editar Jugador", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -558,139 +458,144 @@ fun FormJugadorScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            if (mensajeError != null) {
+            if (uiState.errorMessage != null) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = mensajeError ?: "",
+                        text = uiState.errorMessage,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.padding(12.dp)
                     )
                 }
             }
 
-            // Designación de Coach (visible para Admin o Coach Principal)
+            // Nombre
+            OutlinedTextField(
+                value = uiState.nombre,
+                onValueChange = onNombreChange,
+                label = { Text("Nombre Completo *") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp)
+            )
+
+            // Teléfono
+            OutlinedTextField(
+                value = uiState.telefono,
+                onValueChange = onTelefonoChange,
+                label = { Text("Teléfono de Contacto *") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp)
+            )
+
+            // Correo propio del jugador
+            OutlinedTextField(
+                value = uiState.correo,
+                onValueChange = onCorreoChange,
+                label = { Text("Correo Electrónico (para recordatorios de cobro) *") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp)
+            )
+
+            // Fecha de Inicio
+            OutlinedTextField(
+                value = fechaInicioStr,
+                onValueChange = {
+                    fechaInicioStr = it
+                    try {
+                        val parsed = LocalDate.parse(it.trim())
+                        onFechaInicioChange(parsed)
+                    } catch (_: Exception) {}
+                },
+                label = { Text("Fecha de Inicio (AAAA-MM-DD) *") },
+                placeholder = { Text("2026-03-01") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp)
+            )
+
+            // Valor mensual individual
+            OutlinedTextField(
+                value = uiState.valorMensual,
+                onValueChange = onValorMensualChange,
+                label = { Text("Cuota Mensual Individual ($) *") },
+                placeholder = { Text("Ej. 75.00") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp)
+            )
+
+            // Asignación de Coach si es Administrador o Coach Principal
             if (isAdmin || isCoachPrincipal) {
                 Text(
-                    text = "Coach Designado *",
+                    text = "Coach Asignado *",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                 )
-                coaches.forEach { c ->
+                uiState.coaches.forEach { c ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                coachDesignadoId = c.id
-                            },
+                            .clickable { onCoachIdChange(c.id) },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = coachDesignadoId == c.id,
-                            onClick = {
-                                coachDesignadoId = c.id
-                            }
+                            selected = uiState.coachId == c.id,
+                            onClick = { onCoachIdChange(c.id) }
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "${c.nombre} ${if (c.id == coachId && !isAdmin) "(Tú - Coach Principal)" else ""}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Text(text = c.nombre, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider()
             }
 
-            OutlinedTextField(
-                value = nombre,
-                onValueChange = { nombre = it },
-                label = { Text("Nombre Completo *") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp)
-            )
-
-            OutlinedTextField(
-                value = telefono,
-                onValueChange = { telefono = it },
-                label = { Text("Teléfono *") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp)
-            )
-
-            OutlinedTextField(
-                value = correo,
-                onValueChange = { correo = it },
-                label = { Text("Correo Electrónico (para recordatorios) *") },
-                placeholder = { Text("ejemplo@correo.com") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp)
-            )
-
-            OutlinedTextField(
-                value = fechaInicioStr,
-                onValueChange = { fechaInicioStr = it },
-                label = { Text("Fecha de Inicio (AAAA-MM-DD) *") },
-                placeholder = { Text("Ej. 2026-03-01") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp)
-            )
-
-            OutlinedTextField(
-                value = valorMensualStr,
-                onValueChange = { valorMensualStr = it },
-                label = { Text("Valor Mensual Individual ($) *") },
-                placeholder = { Text("Ej. 60.00") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp)
-            )
-
-            // Asignación de Horarios
+            // Selección de Horarios del Coach
             Text(
-                text = "Asignar Horarios de Clase",
+                text = "Horarios Semanales Disponibles del Coach",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
             )
 
-            if (coachHorarios.isEmpty()) {
+            if (uiState.horariosDisponibles.isEmpty()) {
                 Text(
-                    text = "No hay horarios configurados para este coach. Puedes programarlos en la sección Agenda.",
+                    text = "Este coach no tiene horarios registrados en la agenda.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                coachHorarios.forEach { h ->
-                    val cancha = canchas.firstOrNull { it.id == h.canchaId }
-                    val isChecked = horariosSeleccionados.contains(h.id)
+                uiState.horariosDisponibles.forEach { h ->
+                    val isChecked = uiState.horariosSeleccionados.contains(h.id)
+                    val cancha = uiState.canchasMap[h.canchaId]
+                    val ciudad = cancha?.let { uiState.ciudadesMap[it.ciudadId] }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                horariosSeleccionados = if (isChecked) {
-                                    horariosSeleccionados - h.id
-                                } else {
-                                    horariosSeleccionados + h.id
-                                }
-                            },
+                            .clickable { onToggleHorario(h.id) }
+                            .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(
                             checked = isChecked,
-                            onCheckedChange = { checked ->
-                                horariosSeleccionados = if (checked) {
-                                    horariosSeleccionados + h.id
-                                } else {
-                                    horariosSeleccionados - h.id
-                                }
-                            }
+                            onCheckedChange = { onToggleHorario(h.id) }
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "${h.diaSemana.nombreCompleto} (${h.horaInicio}-${h.horaFin}) • ${cancha?.nombre ?: ""}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Column {
+                            Text(
+                                text = "${h.diaSemana.nombreCompleto} (${h.horaInicio} - ${h.horaFin})",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                            )
+                            Text(
+                                text = "${cancha?.nombre ?: "Cancha"} - ${ciudad?.nombre ?: ""}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -699,38 +604,23 @@ fun FormJugadorScreen(
 
             Button(
                 onClick = {
-                    val valorDouble = valorMensualStr.replace(',', '.').toDoubleOrNull()
-                    if (valorDouble == null || valorDouble <= 0) {
-                        mensajeError = "El valor mensual debe ser un número válido mayor a 0"
-                        return@Button
-                    }
                     try {
-                        val fechaInicio = LocalDate.parse(fechaInicioStr.trim())
-                        val res = repository.guardarJugador(
-                            id = jugadorId,
-                            nombre = nombre,
-                            telefono = telefono,
-                            correo = correo,
-                            fechaInicio = fechaInicio,
-                            valorMensual = valorDouble,
-                            coachId = if (isAdmin || isCoachPrincipal) coachDesignadoId else coachId,
-                            horariosIds = horariosSeleccionados.toList()
-                        )
-                        res.onSuccess {
-                            onBack()
-                        }.onFailure { err ->
-                            mensajeError = err.message
-                        }
-                    } catch (e: Exception) {
-                        mensajeError = "Formato de fecha inválido. Utiliza el formato AAAA-MM-DD (ej: 2026-03-01)"
-                    }
+                        val parsed = LocalDate.parse(fechaInicioStr.trim())
+                        onFechaInicioChange(parsed)
+                    } catch (_: Exception) {}
+                    onGuardarClick()
                 },
+                enabled = !uiState.isGuardando,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Guardar Jugador", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                if (uiState.isGuardando) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Guardar Jugador", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
             }
         }
     }
@@ -739,36 +629,23 @@ fun FormJugadorScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FormPagoScreen(
-    repository: AgendaTenisRepository,
-    jugadorId: String,
-    pagoId: String?,
+    uiState: FormPagoUiState,
+    onFechaChange: (LocalDate) -> Unit,
+    onMontoChange: (String) -> Unit,
+    onObservacionChange: (String) -> Unit,
+    onGuardarClick: () -> Unit,
     onBack: () -> Unit
 ) {
-    val jugadores by repository.jugadores.collectAsState()
-    val pagos by repository.pagos.collectAsState()
-
-    val jugador = jugadores.firstOrNull { it.id == jugadorId }
-    val pagoExistente = remember(pagoId) {
-        pagos.firstOrNull { it.id == pagoId }
-    }
-
-    val valorSugerido = remember(jugador, pagoExistente) {
-        if (pagoExistente != null) pagoExistente.monto.toString()
-        else (jugador?.valorMensual ?: 50.0).toString()
-    }
-
-    var montoStr by remember { mutableStateOf(valorSugerido) }
-    var fechaStr by remember { mutableStateOf(pagoExistente?.fecha?.toString() ?: LocalDate.now().toString()) }
-    var observacion by remember { mutableStateOf(pagoExistente?.observacion ?: "") }
-    var mensajeError by remember { mutableStateOf<String?>(null) }
+    val jugador = uiState.jugador
+    var fechaStr by remember(uiState.fecha) { mutableStateOf(uiState.fecha.toString()) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (pagoId == null) "Registrar Pago" else "Editar Pago", fontWeight = FontWeight.Bold) },
+                title = { Text(if (!uiState.esEdicion) "Registrar Pago" else "Editar Pago", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -803,13 +680,13 @@ fun FormPagoScreen(
                 }
             }
 
-            if (mensajeError != null) {
+            if (uiState.errorMessage != null) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = mensajeError ?: "",
+                        text = uiState.errorMessage,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.padding(12.dp)
                     )
@@ -818,8 +695,8 @@ fun FormPagoScreen(
 
             // Monto precargado con el valor mensual individual del jugador, editable, > 0
             OutlinedTextField(
-                value = montoStr,
-                onValueChange = { montoStr = it },
+                value = uiState.monto,
+                onValueChange = onMontoChange,
                 label = { Text("Monto a registrar ($) *") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth(),
@@ -828,15 +705,21 @@ fun FormPagoScreen(
 
             OutlinedTextField(
                 value = fechaStr,
-                onValueChange = { fechaStr = it },
+                onValueChange = {
+                    fechaStr = it
+                    try {
+                        val parsed = LocalDate.parse(it.trim())
+                        onFechaChange(parsed)
+                    } catch (_: Exception) {}
+                },
                 label = { Text("Fecha de Pago (AAAA-MM-DD) *") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp)
             )
 
             OutlinedTextField(
-                value = observacion,
-                onValueChange = { observacion = it },
+                value = uiState.observacion,
+                onValueChange = onObservacionChange,
                 label = { Text("Observación (opcional)") },
                 placeholder = { Text("Ej. Efectivo / Transferencia Banco Pichincha") },
                 modifier = Modifier.fillMaxWidth(),
@@ -847,42 +730,13 @@ fun FormPagoScreen(
 
             Button(
                 onClick = {
-                    val montoDouble = montoStr.replace(',', '.').toDoubleOrNull()
-                    if (montoDouble == null || montoDouble <= 0) {
-                        mensajeError = "El monto debe ser un número válido mayor a 0"
-                        return@Button
-                    }
                     try {
-                        val fechaLocalDate = LocalDate.parse(fechaStr.trim())
-                        if (pagoId == null) {
-                            val res = repository.registrarPago(
-                                jugadorId = jugadorId,
-                                fecha = fechaLocalDate,
-                                monto = montoDouble,
-                                observacion = observacion
-                            )
-                            res.onSuccess {
-                                onBack()
-                            }.onFailure { err ->
-                                mensajeError = err.message
-                            }
-                        } else {
-                            val res = repository.actualizarPago(
-                                pagoId = pagoId,
-                                fecha = fechaLocalDate,
-                                monto = montoDouble,
-                                observacion = observacion
-                            )
-                            res.onSuccess {
-                                onBack()
-                            }.onFailure { err ->
-                                mensajeError = err.message
-                            }
-                        }
-                    } catch (e: Exception) {
-                        mensajeError = "Formato de fecha inválido. Usa AAAA-MM-DD"
-                    }
+                        val parsed = LocalDate.parse(fechaStr.trim())
+                        onFechaChange(parsed)
+                    } catch (_: Exception) {}
+                    onGuardarClick()
                 },
+                enabled = !uiState.isGuardando,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
@@ -892,7 +746,11 @@ fun FormPagoScreen(
                 ),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Guardar Pago", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                if (uiState.isGuardando) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Guardar Pago", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
             }
         }
     }

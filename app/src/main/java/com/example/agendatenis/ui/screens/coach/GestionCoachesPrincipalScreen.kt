@@ -6,50 +6,45 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.agendatenis.model.*
-import com.example.agendatenis.repository.AgendaTenisRepository
 import com.example.agendatenis.ui.components.AvatarConIniciales
 import com.example.agendatenis.ui.components.ConfirmacionDialog
 import com.example.agendatenis.ui.theme.*
+import com.example.agendatenis.ui.viewmodel.coach.GestionCoachesUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GestionCoachesPrincipalScreen(
-    repository: AgendaTenisRepository,
+    uiState: GestionCoachesUiState,
     onBack: () -> Unit,
     onNavigateToCrearHorarioCoach: (coachId: String) -> Unit,
     onNavigateToEditarHorarioCoach: (coachId: String, horarioId: String) -> Unit,
-    onNavigateToDetalleJugador: (jugadorId: String) -> Unit
+    onNavigateToDetalleJugador: (jugadorId: String) -> Unit,
+    onSetJugadorParaReasignar: (Jugador?) -> Unit,
+    onReasignarCoach: (jugadorId: String, nuevoCoachId: String) -> Unit,
+    onSetHorarioParaEliminar: (Horario?) -> Unit,
+    onConfirmarEliminarHorario: () -> Unit
 ) {
-    val usuarios by repository.usuarios.collectAsState()
-    val canchas by repository.canchas.collectAsState()
-    val ciudades by repository.ciudades.collectAsState()
-    val horarios by repository.horarios.collectAsState()
-    val jugadores by repository.jugadores.collectAsState()
-
-    val canchasMap = remember(canchas) { canchas.associateBy { it.id } }
-    val ciudadesMap = remember(ciudades) { ciudades.associateBy { it.id } }
-
-    var coachSeleccionadoId by remember { mutableStateOf<String?>(null) }
-    var jugadorParaReasignar by remember { mutableStateOf<Jugador?>(null) }
-    var horarioAEliminar by remember { mutableStateOf<Horario?>(null) }
-
-    val coaches = usuarios.filter { it.rol == Rol.COACH }
+    val canchasMap = uiState.canchasMap
+    val ciudadesMap = uiState.ciudadesMap
+    val coaches = uiState.coaches
+    val jugadorParaReasignar = uiState.jugadorParaReasignar
+    val horarioAEliminar = uiState.horarioParaEliminar
 
     // Diálogo Reasignar Jugador
     if (jugadorParaReasignar != null) {
-        val jug = jugadorParaReasignar!!
+        val jug = jugadorParaReasignar
         AlertDialog(
-            onDismissRequest = { jugadorParaReasignar = null },
+            onDismissRequest = { onSetJugadorParaReasignar(null) },
             title = { Text("Reasignar Jugador: ${jug.nombre}") },
             text = {
                 Column {
@@ -64,8 +59,7 @@ fun GestionCoachesPrincipalScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    repository.reasignarCoachAJugador(jug.id, c.id)
-                                    jugadorParaReasignar = null
+                                    onReasignarCoach(jug.id, c.id)
                                 }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -73,8 +67,7 @@ fun GestionCoachesPrincipalScreen(
                             RadioButton(
                                 selected = isCurrent,
                                 onClick = {
-                                    repository.reasignarCoachAJugador(jug.id, c.id)
-                                    jugadorParaReasignar = null
+                                    onReasignarCoach(jug.id, c.id)
                                 }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -84,7 +77,7 @@ fun GestionCoachesPrincipalScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { jugadorParaReasignar = null }) {
+                TextButton(onClick = { onSetJugadorParaReasignar(null) }) {
                     Text("Cancelar")
                 }
             }
@@ -95,17 +88,11 @@ fun GestionCoachesPrincipalScreen(
     if (horarioAEliminar != null) {
         ConfirmacionDialog(
             titulo = "¿Eliminar Horario Designado?",
-            mensaje = "¿Deseas eliminar el horario de ${horarioAEliminar?.diaSemana?.nombreCompleto} (${horarioAEliminar?.horaInicio} - ${horarioAEliminar?.horaFin})?",
+            mensaje = "¿Deseas eliminar el horario de ${horarioAEliminar.diaSemana.nombreCompleto} (${horarioAEliminar.horaInicio} - ${horarioAEliminar.horaFin})?",
             textoConfirmar = "Eliminar",
             esDestructivo = true,
-            onConfirmar = {
-                val hId = horarioAEliminar?.id
-                horarioAEliminar = null
-                if (hId != null) {
-                    repository.eliminarHorario(hId)
-                }
-            },
-            onCancelar = { horarioAEliminar = null }
+            onConfirmar = onConfirmarEliminarHorario,
+            onCancelar = { onSetHorarioParaEliminar(null) }
         )
     }
 
@@ -124,7 +111,7 @@ fun GestionCoachesPrincipalScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -163,11 +150,12 @@ fun GestionCoachesPrincipalScreen(
                 }
             }
 
-            items(coaches) { coach ->
+            items(uiState.coachesGestion) { itemGestion ->
+                val coach = itemGestion.coach
                 val esElMismo = coach.id == "user_coach_1"
-                val jugadoresDelCoach = jugadores.filter { it.coachId == coach.id && it.estado == EstadoJugador.ACTIVO }
-                val horariosDelCoach = horarios.filter { it.coachId == coach.id }.sortedWith(compareBy({ it.diaSemana.diaIso }, { it.horaInicio }))
-                val canchasDesignadas = horariosDelCoach.mapNotNull { canchasMap[it.canchaId] }.distinctBy { it.id }
+                val jugadoresDelCoach = itemGestion.jugadoresDesignados
+                val horariosDelCoach = itemGestion.horariosDesignados
+                val canchasDesignadas = itemGestion.canchasDesignadas
 
                 var expandido by remember { mutableStateOf(esElMismo) }
 
@@ -323,7 +311,7 @@ fun GestionCoachesPrincipalScreen(
                                                     Icon(Icons.Default.Edit, contentDescription = "Editar horario", modifier = Modifier.size(16.dp))
                                                 }
                                                 IconButton(
-                                                    onClick = { horarioAEliminar = h },
+                                                    onClick = { onSetHorarioParaEliminar(h) },
                                                     modifier = Modifier.size(32.dp)
                                                 ) {
                                                     Icon(Icons.Default.Delete, contentDescription = "Eliminar horario", tint = TennisRedDestructive, modifier = Modifier.size(16.dp))
@@ -387,7 +375,7 @@ fun GestionCoachesPrincipalScreen(
                                             }
 
                                             OutlinedButton(
-                                                onClick = { jugadorParaReasignar = jug },
+                                                onClick = { onSetJugadorParaReasignar(jug) },
                                                 shape = RoundedCornerShape(6.dp),
                                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                             ) {

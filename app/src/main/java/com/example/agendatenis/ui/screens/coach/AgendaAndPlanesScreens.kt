@@ -1,15 +1,14 @@
 package com.example.agendatenis.ui.screens.coach
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,73 +16,43 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.agendatenis.model.*
-import com.example.agendatenis.repository.AgendaTenisRepository
 import com.example.agendatenis.ui.components.ConfirmacionDialog
 import com.example.agendatenis.ui.theme.TennisGreenLight
 import com.example.agendatenis.ui.theme.TennisRedDestructive
+import com.example.agendatenis.ui.viewmodel.coach.AgendaCoachUiState
+import com.example.agendatenis.ui.viewmodel.coach.CanchasCoachUiState
+import com.example.agendatenis.ui.viewmodel.coach.FormHorarioUiState
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AgendaCoachScreen(
-    repository: AgendaTenisRepository,
+    uiState: AgendaCoachUiState,
     coachId: String,
+    onCoachFiltroChange: (String) -> Unit,
+    onSeleccionarHorarioParaEliminar: (Horario?) -> Unit,
+    onConfirmarEliminarHorario: () -> Unit,
     onNavigateToCrearHorario: () -> Unit,
     onNavigateToEditarHorario: (String) -> Unit,
     onNavigateToVerCanchas: () -> Unit,
     onNavigateToGestionCoaches: () -> Unit = {}
 ) {
-    val usuarioActual by repository.usuarioActual.collectAsState()
-    val isCoachPrincipal = usuarioActual?.esCoachPrincipal == true
-
-    val horarios by repository.horarios.collectAsState()
-    val canchas by repository.canchas.collectAsState()
-    val ciudades by repository.ciudades.collectAsState()
-    val asignaciones by repository.asignaciones.collectAsState()
-    val jugadores by repository.jugadores.collectAsState()
-    val usuarios by repository.usuarios.collectAsState()
-
-    val coaches = usuarios.filter { it.rol == Rol.COACH }
-    val coachesMap = coaches.associateBy { it.id }
-
-    var coachFiltroId by remember { mutableStateOf(if (isCoachPrincipal) null else coachId) }
-    var horarioAEliminar by remember { mutableStateOf<Horario?>(null) }
-
-    val horariosFiltrados = remember(horarios, coachFiltroId, isCoachPrincipal, coachId) {
-        horarios.filter {
-            if (isCoachPrincipal) {
-                if (coachFiltroId == null) true else it.coachId == coachFiltroId
-            } else {
-                it.coachId == coachId
-            }
-        }.sortedWith(compareBy({ it.diaSemana.diaIso }, { it.horaInicio }))
-    }
-
-    val canchasMap = canchas.associateBy { it.id }
-    val ciudadesMap = ciudades.associateBy { it.id }
-    val jugadoresMap = jugadores.associateBy { it.id }
-
-    if (horarioAEliminar != null) {
+    if (uiState.horarioParaEliminar != null) {
+        val h = uiState.horarioParaEliminar
         ConfirmacionDialog(
             titulo = "¿Eliminar Horario de Clase?",
-            mensaje = "¿Deseas eliminar este bloque de ${horarioAEliminar?.diaSemana?.nombreCompleto} (${horarioAEliminar?.horaInicio} - ${horarioAEliminar?.horaFin})? Los jugadores asignados dejarán de tener esta clase programada.",
+            mensaje = "¿Deseas eliminar este bloque de ${h.diaSemana.nombreCompleto} (${h.horaInicio} - ${h.horaFin})? Los jugadores asignados dejarán de tener esta clase programada.",
             textoConfirmar = "Eliminar",
             esDestructivo = true,
-            onConfirmar = {
-                val hId = horarioAEliminar?.id
-                horarioAEliminar = null
-                if (hId != null) {
-                    repository.eliminarHorario(hId)
-                }
-            },
-            onCancelar = { horarioAEliminar = null }
+            onConfirmar = onConfirmarEliminarHorario,
+            onCancelar = { onSeleccionarHorarioParaEliminar(null) }
         )
     }
+
+    val coachesMap = remember(uiState.coaches) { uiState.coaches.associateBy { it.id } }
 
     Scaffold(
         topBar = {
@@ -91,7 +60,7 @@ fun AgendaCoachScreen(
                 title = {
                     Column {
                         Text("Agenda Semanal", fontWeight = FontWeight.Bold)
-                        if (isCoachPrincipal) {
+                        if (uiState.isCoachPrincipal) {
                             Text(
                                 text = "Supervisión Coach Principal",
                                 style = MaterialTheme.typography.bodySmall,
@@ -101,7 +70,7 @@ fun AgendaCoachScreen(
                     }
                 },
                 actions = {
-                    if (isCoachPrincipal) {
+                    if (uiState.isCoachPrincipal) {
                         IconButton(onClick = onNavigateToGestionCoaches) {
                             Icon(Icons.Default.SupervisorAccount, contentDescription = "Gestionar Coaches")
                         }
@@ -132,29 +101,25 @@ fun AgendaCoachScreen(
                 .padding(horizontal = 16.dp)
         ) {
             // Filtro por coach en caso de Coach Principal (Jorge Sanmartin)
-            if (isCoachPrincipal) {
+            if (uiState.isCoachPrincipal) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    FilterChip(
-                        selected = coachFiltroId == null,
-                        onClick = { coachFiltroId = null },
-                        label = { Text("Todos") }
-                    )
-                    coaches.forEach { c ->
+                    uiState.coaches.forEach { c ->
                         FilterChip(
-                            selected = coachFiltroId == c.id,
-                            onClick = { coachFiltroId = if (coachFiltroId == c.id) null else c.id },
+                            selected = uiState.coachSeleccionadoId == c.id,
+                            onClick = { onCoachFiltroChange(c.id) },
                             label = { Text(if (c.id == coachId) "Mis Horarios" else c.nombre.split(" ").first()) }
                         )
                     }
                 }
             }
 
-            if (horariosFiltrados.isEmpty()) {
+            val todosHorarios = uiState.horariosAgrupados.values.flatten()
+            if (todosHorarios.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -170,10 +135,10 @@ fun AgendaCoachScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(bottom = 80.dp, top = 8.dp)
                 ) {
-                    items(horariosFiltrados) { horario ->
-                        val cancha = canchasMap[horario.canchaId]
-                        val ciudad = cancha?.let { ciudadesMap[it.ciudadId] }
-                        val asignados = asignaciones.filter { it.horarioId == horario.id }
+                    items(todosHorarios) { horario ->
+                        val cancha = uiState.canchasMap[horario.canchaId]
+                        val ciudad = cancha?.let { uiState.ciudadesMap[it.ciudadId] }
+                        val jugadores = uiState.jugadoresPorHorario[horario.id] ?: emptyList()
                         val coachDueño = coachesMap[horario.coachId]
 
                         Card(
@@ -211,7 +176,7 @@ fun AgendaCoachScreen(
                                         )
                                     }
                                     IconButton(
-                                        onClick = { horarioAEliminar = horario },
+                                        onClick = { onSeleccionarHorarioParaEliminar(horario) },
                                         modifier = Modifier.size(28.dp)
                                     ) {
                                         Icon(
@@ -240,7 +205,7 @@ fun AgendaCoachScreen(
                                     )
                                 }
 
-                                if (isCoachPrincipal && coachDueño != null) {
+                                if (uiState.isCoachPrincipal && coachDueño != null) {
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = "Coach: ${coachDueño.nombre}",
@@ -255,12 +220,12 @@ fun AgendaCoachScreen(
 
                                 // Jugadores inscritos en este horario
                                 Text(
-                                    text = if (asignados.isEmpty()) "Sin alumnos asignados" else "Jugadores (${asignados.size}):",
+                                    text = if (jugadores.isEmpty()) "Sin alumnos asignados" else "Jugadores (${jugadores.size}):",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                if (asignados.isNotEmpty()) {
-                                    val nombresJugadores = asignados.mapNotNull { jugadoresMap[it.jugadorId]?.nombre }
+                                if (jugadores.isNotEmpty()) {
+                                    val nombresJugadores = jugadores.map { it.nombre }
                                     Text(
                                         text = nombresJugadores.joinToString(", "),
                                         style = MaterialTheme.typography.bodySmall
@@ -278,40 +243,27 @@ fun AgendaCoachScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FormHorarioScreen(
-    repository: AgendaTenisRepository,
+    uiState: FormHorarioUiState,
+    isCoachPrincipal: Boolean,
     coachId: String,
-    horarioId: String?,
+    onCoachIdChange: (String) -> Unit,
+    onCanchaIdChange: (String) -> Unit,
+    onDiaSemanaChange: (DiaSemana) -> Unit,
+    onHoraInicioChange: (LocalTime) -> Unit,
+    onHoraFinChange: (LocalTime) -> Unit,
+    onGuardarClick: () -> Unit,
     onBack: () -> Unit
 ) {
-    val usuarioActual by repository.usuarioActual.collectAsState()
-    val isCoachPrincipal = usuarioActual?.esCoachPrincipal == true
-
-    val horarios by repository.horarios.collectAsState()
-    val canchas by repository.canchas.collectAsState()
-    val ciudades by repository.ciudades.collectAsState()
-    val usuarios by repository.usuarios.collectAsState()
-    val coaches = usuarios.filter { it.rol == Rol.COACH }
-
-    val horarioExistente = remember(horarioId) {
-        horarios.firstOrNull { it.id == horarioId }
-    }
-
-    var coachDesignadoId by remember { mutableStateOf(horarioExistente?.coachId ?: coachId) }
-    var diaSeleccionado by remember { mutableStateOf(horarioExistente?.diaSemana ?: DiaSemana.LUNES) }
-    var canchaSeleccionadaId by remember { mutableStateOf(horarioExistente?.canchaId ?: (canchas.firstOrNull()?.id ?: "")) }
-    var horaInicioStr by remember { mutableStateOf(horarioExistente?.horaInicio?.toString() ?: "08:00") }
-    var horaFinStr by remember { mutableStateOf(horarioExistente?.horaFin?.toString() ?: "09:30") }
-    var mensajeError by remember { mutableStateOf<String?>(null) }
-
-    val ciudadesMap = ciudades.associateBy { it.id }
+    var horaInicioStr by remember(uiState.horaInicio) { mutableStateOf(uiState.horaInicio.toString()) }
+    var horaFinStr by remember(uiState.horaFin) { mutableStateOf(uiState.horaFin.toString()) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (horarioId == null) "Nuevo Horario" else "Editar Horario", fontWeight = FontWeight.Bold) },
+                title = { Text(if (!uiState.esEdicion) "Nuevo Horario" else "Editar Horario", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -326,13 +278,13 @@ fun FormHorarioScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            if (mensajeError != null) {
+            if (uiState.errorMessage != null) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = mensajeError ?: "",
+                        text = uiState.errorMessage,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.padding(12.dp)
                     )
@@ -342,16 +294,16 @@ fun FormHorarioScreen(
             // Designación de Coach por parte del Coach Principal (Jorge Sanmartin)
             if (isCoachPrincipal) {
                 Text("Designar Horario a Coach *", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-                coaches.forEach { c ->
+                uiState.coaches.forEach { c ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { coachDesignadoId = c.id },
+                            .clickable { onCoachIdChange(c.id) },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = coachDesignadoId == c.id,
-                            onClick = { coachDesignadoId = c.id }
+                            selected = uiState.coachId == c.id,
+                            onClick = { onCoachIdChange(c.id) }
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
@@ -369,9 +321,9 @@ fun FormHorarioScreen(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 DiaSemana.entries.forEach { dia ->
-                    val isSelected = diaSeleccionado == dia
+                    val isSelected = uiState.diaSemana == dia
                     FilledTonalButton(
-                        onClick = { diaSeleccionado = dia },
+                        onClick = { onDiaSemanaChange(dia) },
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = if (isSelected) TennisGreenLight else MaterialTheme.colorScheme.surfaceVariant,
                             contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -385,20 +337,20 @@ fun FormHorarioScreen(
             }
 
             Text("Cancha Designada *", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-            if (canchas.isEmpty()) {
+            if (uiState.canchas.isEmpty()) {
                 Text("No hay canchas registradas en el sistema por el Administrador.", color = MaterialTheme.colorScheme.error)
             } else {
-                canchas.forEach { c ->
-                    val ciudad = ciudadesMap[c.ciudadId]
+                uiState.canchas.forEach { c ->
+                    val ciudad = uiState.ciudadesMap[c.ciudadId]
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { canchaSeleccionadaId = c.id },
+                            .clickable { onCanchaIdChange(c.id) },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = canchaSeleccionadaId == c.id,
-                            onClick = { canchaSeleccionadaId = c.id }
+                            selected = uiState.canchaId == c.id,
+                            onClick = { onCanchaIdChange(c.id) }
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
@@ -411,7 +363,13 @@ fun FormHorarioScreen(
 
             OutlinedTextField(
                 value = horaInicioStr,
-                onValueChange = { horaInicioStr = it },
+                onValueChange = {
+                    horaInicioStr = it
+                    try {
+                        val parsed = LocalTime.parse(it.trim())
+                        onHoraInicioChange(parsed)
+                    } catch (_: Exception) {}
+                },
                 label = { Text("Hora de Inicio (HH:MM) *") },
                 placeholder = { Text("08:00") },
                 modifier = Modifier.fillMaxWidth(),
@@ -420,7 +378,13 @@ fun FormHorarioScreen(
 
             OutlinedTextField(
                 value = horaFinStr,
-                onValueChange = { horaFinStr = it },
+                onValueChange = {
+                    horaFinStr = it
+                    try {
+                        val parsed = LocalTime.parse(it.trim())
+                        onHoraFinChange(parsed)
+                    } catch (_: Exception) {}
+                },
                 label = { Text("Hora de Fin (HH:MM) *") },
                 placeholder = { Text("09:30") },
                 modifier = Modifier.fillMaxWidth(),
@@ -432,32 +396,26 @@ fun FormHorarioScreen(
             Button(
                 onClick = {
                     try {
-                        val inicio = LocalTime.parse(horaInicioStr.trim())
-                        val fin = LocalTime.parse(horaFinStr.trim())
-
-                        val res = repository.guardarHorario(
-                            id = horarioId,
-                            coachId = if (isCoachPrincipal) coachDesignadoId else coachId,
-                            canchaId = canchaSeleccionadaId,
-                            diaSemana = diaSeleccionado,
-                            horaInicio = inicio,
-                            horaFin = fin
-                        )
-                        res.onSuccess {
-                            onBack()
-                        }.onFailure { err ->
-                            mensajeError = err.message
-                        }
+                        val parsedInicio = LocalTime.parse(horaInicioStr.trim())
+                        val parsedFin = LocalTime.parse(horaFinStr.trim())
+                        onHoraInicioChange(parsedInicio)
+                        onHoraFinChange(parsedFin)
+                        onGuardarClick()
                     } catch (e: Exception) {
-                        mensajeError = "Formato de hora inválido. Usa el formato HH:MM de 24 horas (ej: 08:30)"
+                        onGuardarClick()
                     }
                 },
+                enabled = !uiState.isGuardando,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Guardar Horario", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                if (uiState.isGuardando) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Guardar Horario", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
             }
         }
     }
@@ -466,20 +424,16 @@ fun FormHorarioScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CanchasCoachScreen(
-    repository: AgendaTenisRepository,
+    uiState: CanchasCoachUiState,
     onBack: () -> Unit
 ) {
-    val canchas by repository.canchas.collectAsState()
-    val ciudades by repository.ciudades.collectAsState()
-    val ciudadesMap = ciudades.associateBy { it.id }
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Canchas Disponibles", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -494,43 +448,44 @@ fun CanchasCoachScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp)
         ) {
-            items(canchas) { cancha ->
-                val ciudad = ciudadesMap[cancha.ciudadId]
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            items(uiState.ciudadesConCanchas) { (ciudad, canchas) ->
+                canchas.forEach { cancha ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Place,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = cancha.nombre,
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Place,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
                             )
-                            Text(
-                                text = "Ciudad: ${ciudad?.nombre ?: "Sin ciudad"}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (!cancha.referencia.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Ref: ${cancha.referencia}",
+                                    text = cancha.nombre,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Text(
+                                    text = "Ciudad: ${ciudad.nombre}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                if (!cancha.referencia.isNullOrBlank()) {
+                                    Text(
+                                        text = "Ref: ${cancha.referencia}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }

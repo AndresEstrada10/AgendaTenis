@@ -20,12 +20,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.agendatenis.model.Rol
-import com.example.agendatenis.model.Usuario
-import com.example.agendatenis.repository.AgendaTenisRepository
-import com.example.agendatenis.ui.theme.TennisGreenLight
 import com.example.agendatenis.ui.theme.TennisGreenPrimary
 import com.example.agendatenis.ui.theme.TennisYellowAction
+import com.example.agendatenis.ui.viewmodel.auth.LoginUiState
+import com.example.agendatenis.ui.viewmodel.auth.RegistroUiState
 import kotlinx.coroutines.delay
 
 @Composable
@@ -81,16 +79,16 @@ fun SplashScreen(
 
 @Composable
 fun LoginScreen(
-    repository: AgendaTenisRepository,
-    onLoginSuccess: (Usuario) -> Unit,
-    onNavigateToRegistro: () -> Unit
+    uiState: LoginUiState,
+    onCorreoChange: (String) -> Unit,
+    onContrasenaChange: (String) -> Unit,
+    onTogglePasswordVisibility: () -> Unit,
+    onRecordarSesionChange: (Boolean) -> Unit,
+    onLoginClick: () -> Unit,
+    onNavigateToRegistro: () -> Unit,
+    onQuickLoginCoach: () -> Unit = {},
+    onQuickLoginAdmin: () -> Unit = {}
 ) {
-    var correo by remember { mutableStateOf("") }
-    var contrasena by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var recordarSesion by remember { mutableStateOf(true) }
-    var mensajeError by remember { mutableStateOf<String?>(null) }
-
     val scrollState = rememberScrollState()
 
     Column(
@@ -123,13 +121,13 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        if (mensajeError != null) {
+        if (uiState.errorMessage != null) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = mensajeError ?: "",
+                    text = uiState.errorMessage,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.padding(12.dp),
                     style = MaterialTheme.typography.bodyMedium
@@ -139,11 +137,8 @@ fun LoginScreen(
         }
 
         OutlinedTextField(
-            value = correo,
-            onValueChange = {
-                correo = it
-                mensajeError = null
-            },
+            value = uiState.correo,
+            onValueChange = onCorreoChange,
             label = { Text("Correo Electrónico") },
             leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
             singleLine = true,
@@ -154,20 +149,17 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedTextField(
-            value = contrasena,
-            onValueChange = {
-                contrasena = it
-                mensajeError = null
-            },
+            value = uiState.contrasena,
+            onValueChange = onContrasenaChange,
             label = { Text("Contraseña") },
             leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
             trailingIcon = {
-                val image = if (passwordVisible) Icons.Default.Info else Icons.Default.Lock
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                val image = if (uiState.isPasswordVisible) Icons.Default.Info else Icons.Default.Lock
+                IconButton(onClick = onTogglePasswordVisibility) {
                     Icon(imageVector = image, contentDescription = null)
                 }
             },
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            visualTransformation = if (uiState.isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth(),
@@ -181,8 +173,8 @@ fun LoginScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(
-                checked = recordarSesion,
-                onCheckedChange = { recordarSesion = it }
+                checked = uiState.recordarSesion,
+                onCheckedChange = onRecordarSesionChange
             )
             Text(
                 text = "Recordar sesión en este dispositivo",
@@ -193,20 +185,21 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         Button(
-            onClick = {
-                val resultado = repository.iniciarSesion(correo, contrasena)
-                resultado.onSuccess { usuario ->
-                    onLoginSuccess(usuario)
-                }.onFailure { err ->
-                    mensajeError = err.message
-                }
-            },
+            onClick = onLoginClick,
+            enabled = !uiState.isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text(text = "Ingresar", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (uiState.isLoading) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            } else {
+                Text(text = "Ingresar", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -231,11 +224,7 @@ fun LoginScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedButton(
-                onClick = {
-                    val user = repository.usuarios.value.first { it.id == "user_coach_1" }
-                    repository.setUsuarioActual(user)
-                    onLoginSuccess(user)
-                },
+                onClick = onQuickLoginCoach,
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(8.dp)
             ) {
@@ -243,11 +232,7 @@ fun LoginScreen(
             }
 
             OutlinedButton(
-                onClick = {
-                    val user = repository.usuarios.value.first { it.id == "user_admin_1" }
-                    repository.setUsuarioActual(user)
-                    onLoginSuccess(user)
-                },
+                onClick = onQuickLoginAdmin,
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(8.dp)
             ) {
@@ -259,16 +244,16 @@ fun LoginScreen(
 
 @Composable
 fun RegistroScreen(
-    repository: AgendaTenisRepository,
-    onRegistroSuccess: (Usuario) -> Unit,
+    uiState: RegistroUiState,
+    onNombreChange: (String) -> Unit,
+    onCorreoChange: (String) -> Unit,
+    onContrasenaChange: (String) -> Unit,
+    onConfirmarContrasenaChange: (String) -> Unit,
+    onTogglePasswordVisibility: () -> Unit = {},
+    onToggleConfirmPasswordVisibility: () -> Unit = {},
+    onRegistroClick: () -> Unit,
     onNavigateToLogin: () -> Unit
 ) {
-    var nombre by remember { mutableStateOf("") }
-    var correo by remember { mutableStateOf("") }
-    var contrasena by remember { mutableStateOf("") }
-    var confirmarContrasena by remember { mutableStateOf("") }
-    var mensajeError by remember { mutableStateOf<String?>(null) }
-
     val scrollState = rememberScrollState()
 
     Column(
@@ -295,13 +280,13 @@ fun RegistroScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        if (mensajeError != null) {
+        if (uiState.errorMessage != null) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = mensajeError ?: "",
+                    text = uiState.errorMessage,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.padding(12.dp),
                     style = MaterialTheme.typography.bodyMedium
@@ -311,11 +296,8 @@ fun RegistroScreen(
         }
 
         OutlinedTextField(
-            value = nombre,
-            onValueChange = {
-                nombre = it
-                mensajeError = null
-            },
+            value = uiState.nombre,
+            onValueChange = onNombreChange,
             label = { Text("Nombre Completo *") },
             leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
             singleLine = true,
@@ -326,11 +308,8 @@ fun RegistroScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         OutlinedTextField(
-            value = correo,
-            onValueChange = {
-                correo = it
-                mensajeError = null
-            },
+            value = uiState.correo,
+            onValueChange = onCorreoChange,
             label = { Text("Correo Electrónico *") },
             leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
             singleLine = true,
@@ -341,14 +320,17 @@ fun RegistroScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         OutlinedTextField(
-            value = contrasena,
-            onValueChange = {
-                contrasena = it
-                mensajeError = null
-            },
+            value = uiState.contrasena,
+            onValueChange = onContrasenaChange,
             label = { Text("Contraseña (mínimo 6 caracteres) *") },
             leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-            visualTransformation = PasswordVisualTransformation(),
+            trailingIcon = {
+                val icon = if (uiState.isPasswordVisible) Icons.Default.Info else Icons.Default.Lock
+                IconButton(onClick = onTogglePasswordVisibility) {
+                    Icon(imageVector = icon, contentDescription = null)
+                }
+            },
+            visualTransformation = if (uiState.isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth(),
@@ -358,14 +340,17 @@ fun RegistroScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         OutlinedTextField(
-            value = confirmarContrasena,
-            onValueChange = {
-                confirmarContrasena = it
-                mensajeError = null
-            },
+            value = uiState.confirmarContrasena,
+            onValueChange = onConfirmarContrasenaChange,
             label = { Text("Confirmar Contraseña *") },
             leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
-            visualTransformation = PasswordVisualTransformation(),
+            trailingIcon = {
+                val icon = if (uiState.isConfirmPasswordVisible) Icons.Default.Info else Icons.Default.Lock
+                IconButton(onClick = onToggleConfirmPasswordVisibility) {
+                    Icon(imageVector = icon, contentDescription = null)
+                }
+            },
+            visualTransformation = if (uiState.isConfirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth(),
@@ -375,25 +360,21 @@ fun RegistroScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Button(
-            onClick = {
-                val resultado = repository.registrarCoach(
-                    nombre = nombre,
-                    correo = correo,
-                    contrasena = contrasena,
-                    confirmarContrasena = confirmarContrasena
-                )
-                resultado.onSuccess { nuevoCoach ->
-                    onRegistroSuccess(nuevoCoach)
-                }.onFailure { err ->
-                    mensajeError = err.message
-                }
-            },
+            onClick = onRegistroClick,
+            enabled = !uiState.isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text(text = "Crear Cuenta", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (uiState.isLoading) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            } else {
+                Text(text = "Crear Cuenta", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))

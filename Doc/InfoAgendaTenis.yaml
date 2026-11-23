@@ -1,19 +1,21 @@
 # Estado verificado contra el codigo fuente el 2026-11-22.
-# Describe el sistema existente tras la implementacion de valores individuales y recordatorios automaticos por correo.
+# Describe el sistema existente tras la implementacion de la Etapa 3: Arquitectura MVVM, valores individuales y recordatorios automaticos por correo.
 app:
   nombre: AgendaTenis
   plataforma: Android nativo
   lenguaje: Kotlin
-  interfaz: Jetpack Compose y Material 3
+  arquitectura: MVVM (Model-View-ViewModel) con MAD Skills, Coroutines, StateFlow y DI limpia
+  interfaz: Jetpack Compose y Material 3 con State Hoisting estricto
   navegacion: Navigation Compose con NavHost y NavController
   sdk: {minimo: 33, objetivo: 37, compilacion: 37}
   proposito: Organizar jugadores con cuota mensual individual, horarios, canchas, registros de pagos y recordatorios automaticos por correo.
-  almacenamiento: Singleton AgendaTenisRepository con StateFlow en memoria y datos de demostracion; esquema y backend en Supabase.
-  persistencia_entre_procesos: Backend en Supabase PostgreSQL con ejecucion de tareas mediante Supabase Cron.
+  almacenamiento: Single Source of Truth (SSOT) con InMemoryAgendaTenisDataSource y StateFlow reactivos; retardos asincronos simulados (delay) y operaciones en Dispatchers.IO; esquema y backend en Supabase.
+  persistencia_entre_procesos: Backend en Supabase PostgreSQL con ejecucion de tareas mediante Supabase Cron y Resend.
   ui:
     temas: [claro, oscuro]
     colores: Verde primario, fondos neutros, amarillo para acciones destacadas y rojo para acciones destructivas.
     componentes: [avatar con iniciales, buscadores, FAB, dias de semana, banner de pago, campana con contador y dialogos de confirmacion]
+    consumo_estado: collectAsStateWithLifecycle() en todas las pantallas.
 
 roles:
   ADMIN: Administracion global de coaches, jugadores (creacion, edicion y cuota individual) y catalogos de ciudades y canchas.
@@ -66,6 +68,32 @@ entidades:
   derivados: [PagoCalculado, RecordatorioItem, ClaseHoyItem, AdminResumen, ResumenCoachGestion]
   backend_envios: [recordatorios_envios: id, jugador_id, tipo_recordatorio, ciclo_fecha_pago, correo_destinatario, valor_mensual, asunto, mensaje, estado, proveedor, proveedor_id, error_mensaje, intentos, creado_en, enviado_en]
 
+arquitectura_mvvm_etapa_3:
+  paquetes:
+    data:
+      datasource:
+        - AgendaTenisDataSource (interfaz contract de SSOT y flujos StateFlow)
+        - InMemoryAgendaTenisDataSource (implementacion en memoria con delay simulado y Dispatchers.IO)
+      repository:
+        - IAgendaTenisRepository (interfaz que desacopla la UI de las fuentes de datos)
+        - AgendaTenisRepositoryImpl (implementacion de logica de negocio y Dispatchers.IO)
+    di:
+      - AppContainer / DefaultAppContainer (inyeccion manual estructurada de dependencias)
+      - ViewModelFactory (ViewModelProvider.Factory para instanciar todos los ViewModels desacoplados)
+    ui:
+      screens:
+        - auth: LoginScreen, RegistroScreen, SplashScreen
+        - coach: CoachHomeScreen, JugadoresListScreen, AgendaCoachScreen, ConfiguracionCoachScreen, GestionCoachesPrincipalScreen, DetalleJugadorScreen, FormJugadorScreen, FormPagoScreen, FormHorarioScreen, CanchasCoachScreen
+        - admin: AdminHomeScreen, AdminCoachesScreen, AdminJugadoresScreen, AdminCatalogosScreen, AdminConfiguracionScreen, AdminFormCoachScreen
+      viewmodel:
+        - auth: AuthViewModel
+        - coach: CoachHomeViewModel, JugadoresViewModel, AgendaCoachViewModel, ConfiguracionCoachViewModel, GestionCoachesPrincipalViewModel, DetalleJugadorViewModel, FormJugadorViewModel, FormPagoViewModel, FormHorarioViewModel, CanchasCoachViewModel
+        - admin: AdminHomeViewModel, AdminCoachesViewModel, AdminJugadoresViewModel, AdminCatalogosViewModel, AdminConfiguracionViewModel, AdminFormCoachViewModel
+      state_hoisting: Estricto. Ningun composable hijo recibe instancias de ViewModel; solo reciben UiState y lambdas () -> Unit o (T) -> Unit.
+      ciclo_de_vida: Consumo reactivo seguro mediante collectAsStateWithLifecycle().
+    legacy_support:
+      - AgendaTenisRepository facade (Singleton compatible que delega en IAgendaTenisRepository via DefaultAppContainer).
+
 comportamiento_existente:
   autenticacion:
     - Credenciales y usuarios de demostracion en memoria; compatible con supabase auth.
@@ -95,24 +123,11 @@ comportamiento_existente:
     - Reasignar un jugador cambia su coach y conserva las asignaciones existentes.
   configuracion: Tema reactivo, recordarSesion y anticipacion de recordatorios limitada a 1 a 7 dias con valor inicial de 3.
 
-ajuste_2026_11_22:
-  alcance: Eliminacion de planes, implementacion de valores mensuales individuales por jugador (editables por Coach y Admin), y recordatorios automaticos por correo mediante Supabase Cron, Edge Functions y Resend.
-  archivos_funcionales:
-    - app/src/main/java/com/example/agendatenis/model/Entities.kt
-    - app/src/main/java/com/example/agendatenis/repository/AgendaTenisRepository.kt
-    - app/src/main/java/com/example/agendatenis/navigation/Navigation.kt
-    - app/src/main/java/com/example/agendatenis/ui/AppRoot.kt
-    - app/src/main/java/com/example/agendatenis/ui/screens/coach/CoachScreens.kt
-    - app/src/main/java/com/example/agendatenis/ui/screens/coach/JugadorDetailsAndForms.kt
-    - app/src/main/java/com/example/agendatenis/ui/screens/coach/AgendaAndPlanesScreens.kt
-    - app/src/main/java/com/example/agendatenis/ui/screens/admin/AdminScreens.kt
-    - app/src/test/java/com/example/agendatenis/BusinessRulesTest.kt
-    - supabase/migrations/20261122_initial_schema.sql
-    - supabase/functions/enviar-recordatorios/index.ts
-    - supabase/functions/enviar-recordatorios/deno.json
-    - supabase/.env.example
-    - supabase/README.md
-  verificacion:
-    compilacion: ':app:assembleDebug completado correctamente sin errores.'
-    pruebas: ':app:testDebugUnitTest completado, 13 pruebas unitarias sin fallos (100% exitosas).'
-    revision_codigo: Analisis estatico sin advertencias criticas ni errores en todos los archivos modificados.
+verificacion:
+  compilacion: ':app:assembleDebug completado exitosamente.'
+  pruebas: ':app:testDebugUnitTest completado exitosamente con 17 pruebas (12 de reglas de negocio + 1 default + 4 de arquitectura MVVM y ViewModels) al 100% aprobadas.'
+  cobertura_arquitectura:
+    - Flujo UI (Compose) -> ViewModel -> Repository -> DataSource verificado y conectado.
+    - Single Source of Truth (SSOT) garantizado mediante StateFlow.
+    - Dispatchers.IO en todas las operaciones asincronas de lectura/escritura con delays simulados de 40ms.
+    - DI estructurada con AppContainer y ViewModelFactory sin acoplamiento.

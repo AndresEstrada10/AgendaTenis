@@ -21,37 +21,34 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.agendatenis.model.*
-import com.example.agendatenis.repository.AgendaTenisRepository
 import com.example.agendatenis.ui.components.*
 import com.example.agendatenis.ui.theme.*
+import com.example.agendatenis.ui.viewmodel.coach.CoachHomeUiState
+import com.example.agendatenis.ui.viewmodel.coach.ConfiguracionCoachUiState
+import com.example.agendatenis.ui.viewmodel.coach.JugadoresUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CoachHomeScreen(
-    repository: AgendaTenisRepository,
-    coachId: String,
+    uiState: CoachHomeUiState,
+    onDismissBanner: () -> Unit,
+    onSetMostrarDialogRecordatorios: (Boolean) -> Unit,
     onNavigateToDetalleJugador: (String) -> Unit,
     onNavigateToRegistrarPago: (String) -> Unit,
     onNavigateToGestionCoaches: () -> Unit = {}
 ) {
-    val usuarioActual by repository.usuarioActual.collectAsState()
-    val bannerMensaje by repository.bannerMensaje.collectAsState()
-    val recordatorios = remember(coachId, repository.pagos.collectAsState().value, repository.jugadores.collectAsState().value) {
-        repository.obtenerRecordatoriosParaCoach(coachId)
-    }
-    val clasesHoy = remember(coachId, repository.horarios.collectAsState().value, repository.asignaciones.collectAsState().value) {
-        repository.obtenerClasesDeHoyParaCoach(coachId)
-    }
+    val usuarioActual = uiState.usuarioActual
+    val bannerMensaje = uiState.bannerMensaje
+    val recordatorios = uiState.recordatorios
+    val clasesHoy = uiState.clasesHoy
 
-    var mostrarDialogRecordatorios by remember { mutableStateOf(false) }
-
-    if (mostrarDialogRecordatorios) {
+    if (uiState.mostrarDialogRecordatorios) {
         RecordatoriosDialog(
             recordatorios = recordatorios,
             onRecordatorioClick = { jugadorId ->
                 onNavigateToDetalleJugador(jugadorId)
             },
-            onDismiss = { mostrarDialogRecordatorios = false }
+            onDismiss = { onSetMostrarDialogRecordatorios(false) }
         )
     }
 
@@ -68,7 +65,7 @@ fun CoachHomeScreen(
                             )
                         )
                         Text(
-                            text = if (usuarioActual?.esCoachPrincipal == true) "Coach Principal: ${usuarioActual?.nombre}" else "Panel de Inicio",
+                            text = if (usuarioActual?.esCoachPrincipal == true) "Coach Principal: ${usuarioActual.nombre}" else "Panel de Inicio",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -77,7 +74,7 @@ fun CoachHomeScreen(
                 actions = {
                     CampanaConContador(
                         contador = recordatorios.size,
-                        onClick = { mostrarDialogRecordatorios = true }
+                        onClick = { onSetMostrarDialogRecordatorios(true) }
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -93,12 +90,12 @@ fun CoachHomeScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Banner de confirmación "Pago registrado exitosamente" (componente prototipo)
+            // Banner de confirmación "Pago registrado exitosamente"
             if (bannerMensaje != null) {
                 item {
                     BannerPagoRegistrado(
-                        mensaje = bannerMensaje ?: "",
-                        onDismiss = { repository.setBannerMensaje(null) }
+                        mensaje = bannerMensaje,
+                        onDismiss = onDismissBanner
                     )
                 }
             }
@@ -339,48 +336,27 @@ fun CoachHomeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JugadoresListScreen(
-    repository: AgendaTenisRepository,
-    coachId: String,
+    uiState: JugadoresUiState,
+    onSearchQueryChange: (String) -> Unit,
+    onCoachFiltroChange: (String?) -> Unit,
+    onSeleccionarJugadorParaReasignar: (Jugador?) -> Unit,
+    onReasignarCoach: (jugadorId: String, nuevoCoachId: String) -> Unit,
     onNavigateToDetalleJugador: (String) -> Unit,
     onNavigateToCrearJugador: () -> Unit
 ) {
-    val usuarioActual by repository.usuarioActual.collectAsState()
-    val isCoachPrincipal = usuarioActual?.esCoachPrincipal == true
-
-    var searchQuery by remember { mutableStateOf("") }
-    var coachFiltroId by remember { mutableStateOf(if (isCoachPrincipal) null else coachId) }
-    var jugadorParaReasignar by remember { mutableStateOf<Jugador?>(null) }
-
-    val jugadores by repository.jugadores.collectAsState()
-    val usuarios by repository.usuarios.collectAsState()
-    val horarios by repository.horarios.collectAsState()
-    val asignaciones by repository.asignaciones.collectAsState()
-    val pagos by repository.pagos.collectAsState()
-
-    val coaches = usuarios.filter { it.rol == Rol.COACH }
-    val coachesMap = coaches.associateBy { it.id }
-
-    val jugadoresMostrados = remember(jugadores, coachFiltroId, isCoachPrincipal, coachId, searchQuery) {
-        jugadores
-            .filter {
-                if (isCoachPrincipal) {
-                    if (coachFiltroId == null) true else it.coachId == coachFiltroId
-                } else {
-                    it.coachId == coachId
-                }
-            }
-            .filter {
-                if (searchQuery.isBlank()) true
-                else it.nombre.contains(searchQuery, ignoreCase = true) || it.telefono.contains(searchQuery) || it.correo.contains(searchQuery, ignoreCase = true)
-            }
-            .sortedBy { it.nombre }
-    }
+    val isCoachPrincipal = uiState.isCoachPrincipal
+    val coachId = uiState.coachId
+    val searchQuery = uiState.searchQuery
+    val coachFiltroId = uiState.coachFiltroId
+    val jugadorParaReasignar = uiState.jugadorParaReasignar
+    val coaches = uiState.coaches
+    val items = uiState.jugadoresItems
 
     // Modal de Reasignación de Jugador para Coach Principal
     if (jugadorParaReasignar != null) {
-        val jug = jugadorParaReasignar!!
+        val jug = jugadorParaReasignar
         AlertDialog(
-            onDismissRequest = { jugadorParaReasignar = null },
+            onDismissRequest = { onSeleccionarJugadorParaReasignar(null) },
             title = { Text("Reasignar Coach a ${jug.nombre}") },
             text = {
                 Column {
@@ -395,8 +371,7 @@ fun JugadoresListScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    repository.reasignarCoachAJugador(jug.id, c.id)
-                                    jugadorParaReasignar = null
+                                    onReasignarCoach(jug.id, c.id)
                                 }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -404,8 +379,7 @@ fun JugadoresListScreen(
                             RadioButton(
                                 selected = isCurrent,
                                 onClick = {
-                                    repository.reasignarCoachAJugador(jug.id, c.id)
-                                    jugadorParaReasignar = null
+                                    onReasignarCoach(jug.id, c.id)
                                 }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -415,7 +389,7 @@ fun JugadoresListScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { jugadorParaReasignar = null }) {
+                TextButton(onClick = { onSeleccionarJugadorParaReasignar(null) }) {
                     Text("Cerrar")
                 }
             }
@@ -456,10 +430,10 @@ fun JugadoresListScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
         ) {
-            // Buscador en lista (componente prototipo)
+            // Buscador en lista
             BuscadorLista(
                 query = searchQuery,
-                onQueryChange = { searchQuery = it },
+                onQueryChange = onSearchQueryChange,
                 placeholder = "Buscar por nombre, teléfono o correo...",
                 modifier = Modifier.padding(vertical = 8.dp)
             )
@@ -474,25 +448,25 @@ fun JugadoresListScreen(
                 ) {
                     FilterChip(
                         selected = coachFiltroId == null,
-                        onClick = { coachFiltroId = null },
+                        onClick = { onCoachFiltroChange(null) },
                         label = { Text("Todos") }
                     )
                     FilterChip(
                         selected = coachFiltroId == coachId,
-                        onClick = { coachFiltroId = coachId },
+                        onClick = { onCoachFiltroChange(coachId) },
                         label = { Text("Mis Jugadores") }
                     )
                     coaches.filter { it.id != coachId }.forEach { c ->
                         FilterChip(
                             selected = coachFiltroId == c.id,
-                            onClick = { coachFiltroId = if (coachFiltroId == c.id) null else c.id },
+                            onClick = { onCoachFiltroChange(if (coachFiltroId == c.id) null else c.id) },
                             label = { Text(c.nombre.split(" ").first()) }
                         )
                     }
                 }
             }
 
-            if (jugadoresMostrados.isEmpty()) {
+            if (items.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -512,16 +486,12 @@ fun JugadoresListScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(bottom = 80.dp, top = 4.dp)
                 ) {
-                    items(jugadoresMostrados) { jugador ->
-                        val coach = coachesMap[jugador.coachId]
-                        val jugadorAsignaciones = asignaciones.filter { it.jugadorId == jugador.id }
-                        val jugadorHorarios = horarios.filter { h -> jugadorAsignaciones.any { it.horarioId == h.id } }
-                        val diasActivos = jugadorHorarios.map { it.diaSemana }.toSet()
-                        val horasTexto = jugadorHorarios.joinToString(", ") { "${it.horaInicio}-${it.horaFin}" }
-
-                        val calc = remember(jugador.id, pagos) {
-                            repository.calcularEstadoPago(jugador.id)
-                        }
+                    items(items) { itemUi ->
+                        val jugador = itemUi.jugador
+                        val coachNombre = itemUi.coachNombre
+                        val diasActivos = itemUi.diasActivos
+                        val horasTexto = itemUi.horasTexto
+                        val estadoPago = itemUi.estadoPago
 
                         Card(
                             modifier = Modifier
@@ -563,13 +533,13 @@ fun JugadoresListScreen(
                                                         style = MaterialTheme.typography.labelSmall
                                                     )
                                                 }
-                                            } else if (calc != null) {
-                                                val badgeColor = when (calc.estado) {
+                                            } else if (estadoPago != null) {
+                                                val badgeColor = when (estadoPago) {
                                                     EstadoPago.VENCIDO -> TennisRedDestructive
                                                     EstadoPago.PROXIMO -> TennisYellowAction
                                                     EstadoPago.AL_DIA -> TennisGreenLight
                                                 }
-                                                val textoEstado = when (calc.estado) {
+                                                val textoEstado = when (estadoPago) {
                                                     EstadoPago.VENCIDO -> "Vencido"
                                                     EstadoPago.PROXIMO -> "Próximo"
                                                     EstadoPago.AL_DIA -> "Al día"
@@ -595,7 +565,7 @@ fun JugadoresListScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                text = if (isCoachPrincipal && coach != null) "Coach: ${coach.nombre} • $${String.format("%.2f", jugador.valorMensual)}/mes"
+                                                text = if (isCoachPrincipal && coachNombre != null) "Coach: $coachNombre • $${String.format("%.2f", jugador.valorMensual)}/mes"
                                                 else "Cuota: $${String.format("%.2f", jugador.valorMensual)}/mes",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.primary
@@ -603,7 +573,7 @@ fun JugadoresListScreen(
 
                                             if (isCoachPrincipal) {
                                                 IconButton(
-                                                    onClick = { jugadorParaReasignar = jugador },
+                                                    onClick = { onSeleccionarJugadorParaReasignar(jugador) },
                                                     modifier = Modifier.size(28.dp)
                                                 ) {
                                                     Icon(
@@ -620,7 +590,7 @@ fun JugadoresListScreen(
 
                                 Spacer(modifier = Modifier.height(10.dp))
 
-                                // Días L M X J V S D resaltados (componente prototipo)
+                                // Días L M X J V S D resaltados
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -648,30 +618,25 @@ fun JugadoresListScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfiguracionCoachScreen(
-    repository: AgendaTenisRepository,
-    coachId: String,
-    onLogout: () -> Unit
+    uiState: ConfiguracionCoachUiState,
+    onCambiarTema: (TemaApp) -> Unit,
+    onCambiarRecordarSesion: (Boolean) -> Unit,
+    onCambiarDiasAnticipacion: (Int) -> Unit,
+    onSetMostrarConfirmarLogout: (Boolean) -> Unit,
+    onCerrarSesion: () -> Unit
 ) {
-    val config = remember(coachId, repository.configs.collectAsState().value) {
-        repository.obtenerConfigActual()
-    }
-    var tema by remember(config) { mutableStateOf(config.tema) }
-    var recordarSesion by remember(config) { mutableStateOf(config.recordarSesion) }
-    var diasAnticipacion by remember(config) { mutableStateOf(config.diasAnticipacion) }
-    var mostrarConfirmarLogout by remember { mutableStateOf(false) }
+    val tema = uiState.tema
+    val recordarSesion = uiState.recordarSesion
+    val diasAnticipacion = uiState.diasAnticipacion
 
-    if (mostrarConfirmarLogout) {
+    if (uiState.mostrarConfirmarLogout) {
         ConfirmacionDialog(
             titulo = "¿Cerrar Sesión?",
             mensaje = "¿Deseas cerrar tu sesión actual de coach?",
             textoConfirmar = "Cerrar Sesión",
             esDestructivo = true,
-            onConfirmar = {
-                mostrarConfirmarLogout = false
-                repository.cerrarSesion()
-                onLogout()
-            },
-            onCancelar = { mostrarConfirmarLogout = false }
+            onConfirmar = onCerrarSesion,
+            onCancelar = { onSetMostrarConfirmarLogout(false) }
         )
     }
 
@@ -708,10 +673,7 @@ fun ConfiguracionCoachScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         FilledTonalButton(
-                            onClick = {
-                                tema = TemaApp.CLARO
-                                repository.actualizarConfig(TemaApp.CLARO, recordarSesion, diasAnticipacion)
-                            },
+                            onClick = { onCambiarTema(TemaApp.CLARO) },
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 containerColor = if (tema == TemaApp.CLARO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                 contentColor = if (tema == TemaApp.CLARO) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -721,10 +683,7 @@ fun ConfiguracionCoachScreen(
                             Text("Claro")
                         }
                         FilledTonalButton(
-                            onClick = {
-                                tema = TemaApp.OSCURO
-                                repository.actualizarConfig(TemaApp.OSCURO, recordarSesion, diasAnticipacion)
-                            },
+                            onClick = { onCambiarTema(TemaApp.OSCURO) },
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 containerColor = if (tema == TemaApp.OSCURO) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                 contentColor = if (tema == TemaApp.OSCURO) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -756,10 +715,7 @@ fun ConfiguracionCoachScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Slider(
                         value = diasAnticipacion.toFloat(),
-                        onValueChange = {
-                            diasAnticipacion = it.toInt()
-                            repository.actualizarConfig(tema, recordarSesion, diasAnticipacion)
-                        },
+                        onValueChange = { onCambiarDiasAnticipacion(it.toInt()) },
                         valueRange = 1f..7f,
                         steps = 5
                     )
@@ -792,10 +748,7 @@ fun ConfiguracionCoachScreen(
                     }
                     Switch(
                         checked = recordarSesion,
-                        onCheckedChange = {
-                            recordarSesion = it
-                            repository.actualizarConfig(tema, it, diasAnticipacion)
-                        }
+                        onCheckedChange = onCambiarRecordarSesion
                     )
                 }
             }
@@ -803,7 +756,7 @@ fun ConfiguracionCoachScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
-                onClick = { mostrarConfirmarLogout = true },
+                onClick = { onSetMostrarConfirmarLogout(true) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),

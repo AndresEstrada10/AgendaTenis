@@ -6,31 +6,40 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.agendatenis.model.esCoachPrincipal
+import com.example.agendatenis.data.repository.IAgendaTenisRepository
+import com.example.agendatenis.di.DefaultAppContainer
+import com.example.agendatenis.di.ViewModelFactory
 import com.example.agendatenis.model.Rol
 import com.example.agendatenis.model.TemaApp
+import com.example.agendatenis.model.esCoachPrincipal
 import com.example.agendatenis.navigation.*
-import com.example.agendatenis.repository.AgendaTenisRepository
 import com.example.agendatenis.ui.screens.admin.*
 import com.example.agendatenis.ui.screens.auth.LoginScreen
 import com.example.agendatenis.ui.screens.auth.RegistroScreen
 import com.example.agendatenis.ui.screens.auth.SplashScreen
 import com.example.agendatenis.ui.screens.coach.*
 import com.example.agendatenis.ui.theme.AgendaTenisTheme
+import com.example.agendatenis.ui.viewmodel.admin.*
+import com.example.agendatenis.ui.viewmodel.auth.AuthViewModel
+import com.example.agendatenis.ui.viewmodel.coach.*
 
 @Composable
 fun AppRoot(
-    repository: AgendaTenisRepository = AgendaTenisRepository.getInstance(),
+    repository: IAgendaTenisRepository = DefaultAppContainer.getInstance().repository,
     navController: NavHostController = rememberNavController()
 ) {
-    val usuarioActual by repository.usuarioActual.collectAsState()
-    val configs by repository.configs.collectAsState()
+    val viewModelFactory = remember(repository) { ViewModelFactory(repository) }
+
+    val usuarioActual by repository.usuarioActual.collectAsStateWithLifecycle()
+    val configs by repository.configs.collectAsStateWithLifecycle()
 
     val configUsuario = usuarioActual?.let { configs[it.id] }
     val isDark = when (configUsuario?.tema) {
@@ -45,8 +54,11 @@ fun AppRoot(
             color = MaterialTheme.colorScheme.background
         ) {
             val gestionCoachesContent: @Composable (() -> Unit) -> Unit = { onBack ->
+                val gestionViewModel: GestionCoachesPrincipalViewModel = viewModel(factory = viewModelFactory)
+                val gestionUiState by gestionViewModel.uiState.collectAsStateWithLifecycle()
+
                 GestionCoachesPrincipalScreen(
-                    repository = repository,
+                    uiState = gestionUiState,
                     onBack = onBack,
                     onNavigateToCrearHorarioCoach = { cId ->
                         navController.navigate(Routes.formHorario(coachId = cId))
@@ -56,7 +68,11 @@ fun AppRoot(
                     },
                     onNavigateToDetalleJugador = { jId ->
                         navController.navigate(Routes.detalleJugador(jId))
-                    }
+                    },
+                    onSetJugadorParaReasignar = gestionViewModel::setJugadorParaReasignar,
+                    onReasignarCoach = gestionViewModel::reasignarCoach,
+                    onSetHorarioParaEliminar = gestionViewModel::setHorarioParaEliminar,
+                    onConfirmarEliminarHorario = gestionViewModel::eliminarHorarioConfirmado
                 )
             }
 
@@ -83,36 +99,78 @@ fun AppRoot(
 
                 // 2. Login
                 composable(Routes.LOGIN) {
+                    val authViewModel: AuthViewModel = viewModel(factory = viewModelFactory)
+                    val loginUiState by authViewModel.loginUiState.collectAsStateWithLifecycle()
+
                     LoginScreen(
-                        repository = repository,
-                        onLoginSuccess = { user ->
-                            val destination = if (user.rol == Rol.ADMIN) Routes.adminMain() else Routes.coachMain()
-                            navController.navigate(destination) {
-                                popUpTo(Routes.LOGIN) { inclusive = true }
-                            }
+                        uiState = loginUiState,
+                        onCorreoChange = authViewModel::onCorreoChange,
+                        onContrasenaChange = authViewModel::onContrasenaChange,
+                        onTogglePasswordVisibility = authViewModel::togglePasswordVisibility,
+                        onRecordarSesionChange = authViewModel::onRecordarSesionChange,
+                        onLoginClick = {
+                            authViewModel.iniciarSesion(
+                                onSuccess = { user ->
+                                    val destination = if (user.rol == Rol.ADMIN) Routes.adminMain() else Routes.coachMain()
+                                    navController.navigate(destination) {
+                                        popUpTo(Routes.LOGIN) { inclusive = true }
+                                    }
+                                }
+                            )
                         },
                         onNavigateToRegistro = {
+                            authViewModel.resetForms()
                             navController.navigate(Routes.REGISTRO)
+                        },
+                        onQuickLoginCoach = {
+                            authViewModel.quickLoginCoach { user ->
+                                val destination = if (user.rol == Rol.ADMIN) Routes.adminMain() else Routes.coachMain()
+                                navController.navigate(destination) {
+                                    popUpTo(Routes.LOGIN) { inclusive = true }
+                                }
+                            }
+                        },
+                        onQuickLoginAdmin = {
+                            authViewModel.quickLoginAdmin { user ->
+                                val destination = if (user.rol == Rol.ADMIN) Routes.adminMain() else Routes.coachMain()
+                                navController.navigate(destination) {
+                                    popUpTo(Routes.LOGIN) { inclusive = true }
+                                }
+                            }
                         }
                     )
                 }
 
                 // 3. Registro
                 composable(Routes.REGISTRO) {
+                    val authViewModel: AuthViewModel = viewModel(factory = viewModelFactory)
+                    val registroUiState by authViewModel.registroUiState.collectAsStateWithLifecycle()
+
                     RegistroScreen(
-                        repository = repository,
-                        onRegistroSuccess = {
-                            navController.navigate(Routes.coachMain()) {
-                                popUpTo(Routes.REGISTRO) { inclusive = true }
-                            }
+                        uiState = registroUiState,
+                        onNombreChange = authViewModel::onNombreRegistroChange,
+                        onCorreoChange = authViewModel::onCorreoRegistroChange,
+                        onContrasenaChange = authViewModel::onContrasenaRegistroChange,
+                        onConfirmarContrasenaChange = authViewModel::onConfirmarContrasenaRegistroChange,
+                        onTogglePasswordVisibility = authViewModel::toggleRegistroPasswordVisibility,
+                        onToggleConfirmPasswordVisibility = authViewModel::toggleRegistroConfirmPasswordVisibility,
+                        onRegistroClick = {
+                            authViewModel.registrar(
+                                onSuccess = {
+                                    navController.navigate(Routes.coachMain()) {
+                                        popUpTo(Routes.REGISTRO) { inclusive = true }
+                                    }
+                                }
+                            )
                         },
                         onNavigateToLogin = {
+                            authViewModel.resetForms()
                             navController.popBackStack()
                         }
                     )
                 }
 
-                // 4. Coach Main Scaffold (Coaches visible solo para el coach principal)
+                // 4. Coach Main Scaffold
                 composable(
                     route = Routes.COACH_MAIN,
                     arguments = listOf(
@@ -126,17 +184,32 @@ fun AppRoot(
                     val tabName = backStackEntry.arguments?.getString("tab")
                     val initialTab = CoachTab.entries.firstOrNull { it.name == tabName } ?: CoachTab.INICIO
                     val coachId = usuarioActual?.id ?: "user_coach_1"
-                    val tabs = CoachTab.entries.filter {
-                        it != CoachTab.COACHES || usuarioActual?.esCoachPrincipal == true
-                    }
-                    var selectedTab by remember(tabName) {
-                        mutableStateOf(initialTab.takeIf { it in tabs } ?: CoachTab.INICIO)
+                    val isPrincipal = usuarioActual?.esCoachPrincipal == true
+                    var selectedTab by remember(tabName) { mutableStateOf(initialTab) }
+
+                    val tabsDisponibles = remember(isPrincipal) {
+                        if (isPrincipal) {
+                            listOf(
+                                CoachTab.INICIO,
+                                CoachTab.COACHES,
+                                CoachTab.JUGADORES,
+                                CoachTab.AGENDA,
+                                CoachTab.AJUSTES
+                            )
+                        } else {
+                            listOf(
+                                CoachTab.INICIO,
+                                CoachTab.JUGADORES,
+                                CoachTab.AGENDA,
+                                CoachTab.AJUSTES
+                            )
+                        }
                     }
 
                     Scaffold(
                         bottomBar = {
                             NavigationBar {
-                                tabs.forEach { tab ->
+                                tabsDisponibles.forEach { tab ->
                                     NavigationBarItem(
                                         selected = selectedTab == tab,
                                         onClick = { selectedTab = tab },
@@ -150,9 +223,13 @@ fun AppRoot(
                         Surface(modifier = Modifier.padding(innerPadding)) {
                             when (selectedTab) {
                                 CoachTab.INICIO -> {
+                                    val homeViewModel: CoachHomeViewModel = viewModel(factory = viewModelFactory)
+                                    val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+
                                     CoachHomeScreen(
-                                        repository = repository,
-                                        coachId = coachId,
+                                        uiState = homeUiState,
+                                        onDismissBanner = homeViewModel::dismissBanner,
+                                        onSetMostrarDialogRecordatorios = homeViewModel::setMostrarDialogRecordatorios,
                                         onNavigateToDetalleJugador = { jId ->
                                             navController.navigate(Routes.detalleJugador(jId))
                                         },
@@ -166,13 +243,26 @@ fun AppRoot(
                                 }
 
                                 CoachTab.COACHES -> {
-                                    gestionCoachesContent { selectedTab = CoachTab.INICIO }
+                                    if (isPrincipal) {
+                                        gestionCoachesContent {
+                                            selectedTab = CoachTab.INICIO
+                                        }
+                                    }
                                 }
 
                                 CoachTab.JUGADORES -> {
+                                    val jugadoresViewModel: JugadoresViewModel = viewModel(factory = viewModelFactory)
+                                    LaunchedEffect(coachId) {
+                                        jugadoresViewModel.init(coachId)
+                                    }
+                                    val jugadoresUiState by jugadoresViewModel.uiState.collectAsStateWithLifecycle()
+
                                     JugadoresListScreen(
-                                        repository = repository,
-                                        coachId = coachId,
+                                        uiState = jugadoresUiState,
+                                        onSearchQueryChange = jugadoresViewModel::onSearchQueryChange,
+                                        onCoachFiltroChange = jugadoresViewModel::onCoachFiltroChange,
+                                        onSeleccionarJugadorParaReasignar = jugadoresViewModel::onSeleccionarJugadorParaReasignar,
+                                        onReasignarCoach = jugadoresViewModel::reasignarCoach,
                                         onNavigateToDetalleJugador = { jId ->
                                             navController.navigate(Routes.detalleJugador(jId))
                                         },
@@ -183,9 +273,18 @@ fun AppRoot(
                                 }
 
                                 CoachTab.AGENDA -> {
+                                    val agendaViewModel: AgendaCoachViewModel = viewModel(factory = viewModelFactory)
+                                    LaunchedEffect(coachId) {
+                                        agendaViewModel.init(coachId)
+                                    }
+                                    val agendaUiState by agendaViewModel.uiState.collectAsStateWithLifecycle()
+
                                     AgendaCoachScreen(
-                                        repository = repository,
+                                        uiState = agendaUiState,
                                         coachId = coachId,
+                                        onCoachFiltroChange = agendaViewModel::onCoachFiltroChange,
+                                        onSeleccionarHorarioParaEliminar = agendaViewModel::onSeleccionarHorarioParaEliminar,
+                                        onConfirmarEliminarHorario = agendaViewModel::eliminarHorarioConfirmado,
                                         onNavigateToCrearHorario = {
                                             navController.navigate(Routes.formHorario(coachId = coachId))
                                         },
@@ -202,12 +301,23 @@ fun AppRoot(
                                 }
 
                                 CoachTab.AJUSTES -> {
+                                    val configCoachViewModel: ConfiguracionCoachViewModel = viewModel(factory = viewModelFactory)
+                                    LaunchedEffect(coachId) {
+                                        configCoachViewModel.init(coachId)
+                                    }
+                                    val configCoachUiState by configCoachViewModel.uiState.collectAsStateWithLifecycle()
+
                                     ConfiguracionCoachScreen(
-                                        repository = repository,
-                                        coachId = coachId,
-                                        onLogout = {
-                                            navController.navigate(Routes.LOGIN) {
-                                                popUpTo(0) { inclusive = true }
+                                        uiState = configCoachUiState,
+                                        onCambiarTema = configCoachViewModel::cambiarTema,
+                                        onCambiarRecordarSesion = configCoachViewModel::cambiarRecordarSesion,
+                                        onCambiarDiasAnticipacion = configCoachViewModel::cambiarDiasAnticipacion,
+                                        onSetMostrarConfirmarLogout = configCoachViewModel::setMostrarConfirmarLogout,
+                                        onCerrarSesion = {
+                                            configCoachViewModel.cerrarSesion {
+                                                navController.navigate(Routes.LOGIN) {
+                                                    popUpTo(0) { inclusive = true }
+                                                }
                                             }
                                         }
                                     )
@@ -222,7 +332,7 @@ fun AppRoot(
                     gestionCoachesContent { navController.popBackStack() }
                 }
 
-                // 6. Admin Main Scaffold (Tabs: Inicio, Coaches, Jugadores, Catalogos, Ajustes)
+                // 6. Admin Main Scaffold
                 composable(
                     route = Routes.ADMIN_MAIN,
                     arguments = listOf(
@@ -255,8 +365,11 @@ fun AppRoot(
                         Surface(modifier = Modifier.padding(innerPadding)) {
                             when (selectedTab) {
                                 AdminTab.INICIO -> {
+                                    val adminHomeViewModel: AdminHomeViewModel = viewModel(factory = viewModelFactory)
+                                    val adminHomeUiState by adminHomeViewModel.uiState.collectAsStateWithLifecycle()
+
                                     AdminHomeScreen(
-                                        repository = repository,
+                                        uiState = adminHomeUiState,
                                         onNavigateToCoaches = { selectedTab = AdminTab.COACHES },
                                         onNavigateToJugadores = { selectedTab = AdminTab.JUGADORES },
                                         onNavigateToCatalogos = { selectedTab = AdminTab.CATALOGOS }
@@ -264,8 +377,13 @@ fun AppRoot(
                                 }
 
                                 AdminTab.COACHES -> {
+                                    val adminCoachesViewModel: AdminCoachesViewModel = viewModel(factory = viewModelFactory)
+                                    val adminCoachesUiState by adminCoachesViewModel.uiState.collectAsStateWithLifecycle()
+
                                     AdminCoachesScreen(
-                                        repository = repository,
+                                        uiState = adminCoachesUiState,
+                                        onSearchQueryChange = adminCoachesViewModel::onSearchQueryChange,
+                                        onToggleEstadoCoach = adminCoachesViewModel::toggleEstadoCoach,
                                         onNavigateToCrearCoach = {
                                             navController.navigate(Routes.adminFormCoach())
                                         },
@@ -276,8 +394,15 @@ fun AppRoot(
                                 }
 
                                 AdminTab.JUGADORES -> {
+                                    val adminJugadoresViewModel: AdminJugadoresViewModel = viewModel(factory = viewModelFactory)
+                                    val adminJugadoresUiState by adminJugadoresViewModel.uiState.collectAsStateWithLifecycle()
+
                                     AdminJugadoresScreen(
-                                        repository = repository,
+                                        uiState = adminJugadoresUiState,
+                                        onSearchQueryChange = adminJugadoresViewModel::onSearchQueryChange,
+                                        onCoachFiltroChange = adminJugadoresViewModel::onCoachFiltroChange,
+                                        onSeleccionarJugadorParaReasignar = adminJugadoresViewModel::onSeleccionarJugadorParaReasignar,
+                                        onConfirmarReasignarCoach = adminJugadoresViewModel::reasignarCoach,
                                         onNavigateToDetalleJugador = { jId ->
                                             navController.navigate(Routes.detalleJugador(jId))
                                         },
@@ -288,18 +413,35 @@ fun AppRoot(
                                 }
 
                                 AdminTab.CATALOGOS -> {
+                                    val adminCatalogosViewModel: AdminCatalogosViewModel = viewModel(factory = viewModelFactory)
+                                    val adminCatalogosUiState by adminCatalogosViewModel.uiState.collectAsStateWithLifecycle()
+
                                     AdminCatalogosScreen(
-                                        repository = repository
+                                        uiState = adminCatalogosUiState,
+                                        onGuardarCiudad = adminCatalogosViewModel::guardarCiudad,
+                                        onEliminarCiudad = adminCatalogosViewModel::eliminarCiudad,
+                                        onGuardarCancha = adminCatalogosViewModel::guardarCancha,
+                                        onEliminarCancha = adminCatalogosViewModel::eliminarCancha,
+                                        onLimpiarError = adminCatalogosViewModel::limpiarError
                                     )
                                 }
 
                                 AdminTab.AJUSTES -> {
+                                    val adminConfigViewModel: AdminConfiguracionViewModel = viewModel(factory = viewModelFactory)
+                                    LaunchedEffect(adminId) {
+                                        adminConfigViewModel.init(adminId)
+                                    }
+                                    val adminConfigUiState by adminConfigViewModel.uiState.collectAsStateWithLifecycle()
+
                                     AdminConfiguracionScreen(
-                                        repository = repository,
-                                        adminId = adminId,
-                                        onLogout = {
-                                            navController.navigate(Routes.LOGIN) {
-                                                popUpTo(0) { inclusive = true }
+                                        uiState = adminConfigUiState,
+                                        onCambiarTema = adminConfigViewModel::cambiarTema,
+                                        onSetMostrarConfirmarLogout = adminConfigViewModel::setMostrarConfirmarLogout,
+                                        onLogoutConfirmado = {
+                                            adminConfigViewModel.cerrarSesion {
+                                                navController.navigate(Routes.LOGIN) {
+                                                    popUpTo(0) { inclusive = true }
+                                                }
                                             }
                                         }
                                     )
@@ -317,9 +459,14 @@ fun AppRoot(
                     )
                 ) { backStackEntry ->
                     val jugadorId = backStackEntry.arguments?.getString("jugadorId") ?: ""
+                    val detalleViewModel: DetalleJugadorViewModel = viewModel(factory = viewModelFactory)
+                    LaunchedEffect(jugadorId) {
+                        detalleViewModel.init(jugadorId)
+                    }
+                    val detalleUiState by detalleViewModel.uiState.collectAsStateWithLifecycle()
+
                     DetalleJugadorScreen(
-                        repository = repository,
-                        jugadorId = jugadorId,
+                        uiState = detalleUiState,
                         onBack = { navController.popBackStack() },
                         onNavigateToEditarJugador = { jId ->
                             navController.navigate(Routes.formJugador(jId))
@@ -329,11 +476,19 @@ fun AppRoot(
                         },
                         onNavigateToEditarPago = { jId, pId ->
                             navController.navigate(Routes.formPago(jId, pId))
-                        }
+                        },
+                        onSetMostrarConfirmarEliminar = detalleViewModel::setMostrarConfirmarEliminar,
+                        onConfirmarEliminarJugador = {
+                            detalleViewModel.eliminarJugadorConfirmado {
+                                navController.popBackStack()
+                            }
+                        },
+                        onSetPagoAEliminar = detalleViewModel::setPagoAEliminar,
+                        onConfirmarEliminarPago = detalleViewModel::eliminarPagoConfirmado
                     )
                 }
 
-                // 8. Formulario de Jugador (Crear / Editar) - Accesible tanto por COACH como por ADMIN
+                // 8. Formulario de Jugador (Crear / Editar)
                 composable(
                     route = Routes.FORM_JUGADOR,
                     arguments = listOf(
@@ -346,10 +501,28 @@ fun AppRoot(
                 ) { backStackEntry ->
                     val jugadorId = backStackEntry.arguments?.getString("jugadorId")
                     val coachId = usuarioActual?.id ?: "user_coach_1"
+                    val formJugadorViewModel: FormJugadorViewModel = viewModel(factory = viewModelFactory)
+                    LaunchedEffect(jugadorId, coachId) {
+                        formJugadorViewModel.init(coachId, jugadorId)
+                    }
+                    val formJugadorUiState by formJugadorViewModel.uiState.collectAsStateWithLifecycle()
+
                     FormJugadorScreen(
-                        repository = repository,
-                        coachId = coachId,
-                        jugadorId = jugadorId,
+                        uiState = formJugadorUiState,
+                        isCoachPrincipal = usuarioActual?.esCoachPrincipal == true,
+                        isAdmin = usuarioActual?.rol == Rol.ADMIN,
+                        onNombreChange = formJugadorViewModel::onNombreChange,
+                        onTelefonoChange = formJugadorViewModel::onTelefonoChange,
+                        onCorreoChange = formJugadorViewModel::onCorreoChange,
+                        onFechaInicioChange = formJugadorViewModel::onFechaInicioChange,
+                        onValorMensualChange = formJugadorViewModel::onValorMensualChange,
+                        onCoachIdChange = formJugadorViewModel::onCoachIdChange,
+                        onToggleHorario = formJugadorViewModel::toggleHorario,
+                        onGuardarClick = {
+                            formJugadorViewModel.guardar {
+                                navController.popBackStack()
+                            }
+                        },
                         onBack = { navController.popBackStack() }
                     )
                 }
@@ -368,10 +541,22 @@ fun AppRoot(
                 ) { backStackEntry ->
                     val jugadorId = backStackEntry.arguments?.getString("jugadorId") ?: ""
                     val pagoId = backStackEntry.arguments?.getString("pagoId")
+                    val formPagoViewModel: FormPagoViewModel = viewModel(factory = viewModelFactory)
+                    LaunchedEffect(jugadorId, pagoId) {
+                        formPagoViewModel.init(jugadorId, pagoId)
+                    }
+                    val formPagoUiState by formPagoViewModel.uiState.collectAsStateWithLifecycle()
+
                     FormPagoScreen(
-                        repository = repository,
-                        jugadorId = jugadorId,
-                        pagoId = pagoId,
+                        uiState = formPagoUiState,
+                        onFechaChange = formPagoViewModel::onFechaChange,
+                        onMontoChange = formPagoViewModel::onMontoChange,
+                        onObservacionChange = formPagoViewModel::onObservacionChange,
+                        onGuardarClick = {
+                            formPagoViewModel.guardar {
+                                navController.popBackStack()
+                            }
+                        },
                         onBack = { navController.popBackStack() }
                     )
                 }
@@ -395,18 +580,37 @@ fun AppRoot(
                     val paramCoachId = backStackEntry.arguments?.getString("coachId")
                     val coachId = paramCoachId ?: (usuarioActual?.id ?: "user_coach_1")
                     val horarioId = backStackEntry.arguments?.getString("horarioId")
+                    val formHorarioViewModel: FormHorarioViewModel = viewModel(factory = viewModelFactory)
+                    LaunchedEffect(coachId, horarioId) {
+                        formHorarioViewModel.init(coachId, horarioId)
+                    }
+                    val formHorarioUiState by formHorarioViewModel.uiState.collectAsStateWithLifecycle()
+
                     FormHorarioScreen(
-                        repository = repository,
-                        coachId = coachId,
-                        horarioId = horarioId,
+                        uiState = formHorarioUiState,
+                        isCoachPrincipal = usuarioActual?.esCoachPrincipal == true,
+                        coachId = formHorarioUiState.coachId,
+                        onCoachIdChange = formHorarioViewModel::onCoachIdChange,
+                        onCanchaIdChange = formHorarioViewModel::onCanchaIdChange,
+                        onDiaSemanaChange = formHorarioViewModel::onDiaSemanaChange,
+                        onHoraInicioChange = formHorarioViewModel::onHoraInicioChange,
+                        onHoraFinChange = formHorarioViewModel::onHoraFinChange,
+                        onGuardarClick = {
+                            formHorarioViewModel.guardar {
+                                navController.popBackStack()
+                            }
+                        },
                         onBack = { navController.popBackStack() }
                     )
                 }
 
                 // 11. Visualización de Canchas para Coach
                 composable(Routes.CANCHAS_COACH) {
+                    val canchasViewModel: CanchasCoachViewModel = viewModel(factory = viewModelFactory)
+                    val canchasUiState by canchasViewModel.uiState.collectAsStateWithLifecycle()
+
                     CanchasCoachScreen(
-                        repository = repository,
+                        uiState = canchasUiState,
                         onBack = { navController.popBackStack() }
                     )
                 }
@@ -423,9 +627,23 @@ fun AppRoot(
                     )
                 ) { backStackEntry ->
                     val coachId = backStackEntry.arguments?.getString("coachId")
+                    val formCoachViewModel: AdminFormCoachViewModel = viewModel(factory = viewModelFactory)
+                    LaunchedEffect(coachId) {
+                        formCoachViewModel.init(coachId)
+                    }
+                    val formCoachUiState by formCoachViewModel.uiState.collectAsStateWithLifecycle()
+
                     AdminFormCoachScreen(
-                        repository = repository,
-                        coachId = coachId,
+                        uiState = formCoachUiState,
+                        onNombreChange = formCoachViewModel::onNombreChange,
+                        onCorreoChange = formCoachViewModel::onCorreoChange,
+                        onContrasenaChange = formCoachViewModel::onContrasenaChange,
+                        onEstadoChange = formCoachViewModel::onEstadoChange,
+                        onGuardarClick = {
+                            formCoachViewModel.guardar {
+                                navController.popBackStack()
+                            }
+                        },
                         onBack = { navController.popBackStack() }
                     )
                 }
